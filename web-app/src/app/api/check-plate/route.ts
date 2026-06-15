@@ -1,22 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { createWorker } from 'tesseract.js';
 import { getSQL } from '@/lib/db';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+// Inicializar la API de Gemini
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Función para limpiar y normalizar el texto de la placa
 function extractPlate(rawText: string): string {
-  // Remover espacios, saltos de línea, caracteres especiales
   const cleaned = rawText
     .replace(/\s+/g, '')
     .replace(/[^A-Z0-9]/gi, '')
     .toUpperCase();
 
-  // Buscar patrón de placa colombiana: 3 letras + 3 números (ej: ABC123)
-  // También acepta otros formatos comunes
   const platePatterns = [
-    /[A-Z]{3}\d{3}/,   // ABC123 - Colombia estándar
-    /[A-Z]{2}\d{4}/,   // AB1234
-    /[A-Z]{3}\d{2}[A-Z]/, // ABC12D - motos Colombia
-    /[A-Z0-9]{5,8}/,   // Cualquier alfanumérico de 5-8 chars
+    /[A-Z]{3}\d{3}/,   // Colombia estándar
+    /[A-Z]{2}\d{4}/,   
+    /[A-Z]{3}\d{2}[A-Z]/, // Motos Colombia
+    /[A-Z0-9]{5,8}/,   
   ];
 
   for (const pattern of platePatterns) {
@@ -24,13 +24,11 @@ function extractPlate(rawText: string): string {
     if (match) return match[0];
   }
 
-  // Retornar los primeros 6 caracteres alfanuméricos si no hay match
   return cleaned.slice(0, 8);
 }
 
-// POST /api/check-plate — recibe imagen, hace OCR, verifica pago
+// POST /api/check-plate — recibe imagen, usa IA, verifica pago
 export async function POST(request: NextRequest) {
-  let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
   try {
     const formData = await request.formData();
     const imageFile = formData.get('image') as File | null;
@@ -39,29 +37,45 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No se recibió imagen' }, { status: 400 });
     }
 
-    // Convertir File a Buffer
+    if (!process.env.GEMINI_API_KEY) {
+      return NextResponse.json({ error: 'Falta la clave GEMINI_API_KEY en el servidor.' }, { status: 500 });
+    }
+
+    // Convertir a base64 para Gemini
     const arrayBuffer = await imageFile.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
+    const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-    // OCR con Tesseract.js (solo 'eng' es mucho más rápido y suficiente para placas)
-    worker = await createWorker('eng', 1, {
-      logger: () => {}, // silenciar logs
-    });
+    // Usar el modelo Flash súper rápido
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    
+    const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
+    
+    const imagePart = {
+      inlineData: {
+        data: base64Image,
+        mimeType: imageFile.type || 'image/jpeg',
+      },
+    };
 
-    await worker.setParameters({
-      tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-    });
+    // Llamada a la IA (tarda ~1 segundo)
+    const result = await model.generateContent([prompt, imagePart]);
+    const text = result.response.text().trim();
 
-    const { data: { text } } = await worker.recognize(buffer);
-    await worker.terminate();
-    worker = null;
+    if (text === 'NULL' || text === '') {
+      return NextResponse.json({
+        approved: false,
+        error: 'La IA no detectó ninguna placa clara',
+        raw_text: text,
+        placa: null,
+      }, { status: 200 });
+    }
 
     const detectedPlate = extractPlate(text);
 
     if (!detectedPlate || detectedPlate.length < 4) {
       return NextResponse.json({
         approved: false,
-        error: 'No se pudo leer la placa',
+        error: 'La IA leyó texto inválido o muy corto',
         raw_text: text,
         placa: null,
       }, { status: 200 });
@@ -87,7 +101,7 @@ export async function POST(request: NextRequest) {
         ${cliente?.cedula ?? null},
         ${cliente?.nombre ?? null},
         ${resultado},
-        ${'camara'}
+        ${'camara_ia'}
       )
     `;
 
@@ -113,10 +127,7 @@ export async function POST(request: NextRequest) {
     });
 
   } catch (error) {
-    if (worker) {
-      try { await worker.terminate(); } catch (_e) { /* ignore */ }
-    }
-    console.error('Error en check-plate:', error);
-    return NextResponse.json({ error: 'Error procesando la imagen' }, { status: 500 });
+    console.error('Error en check-plate (IA):', error);
+    return NextResponse.json({ error: 'Error interno en la IA procesando la imagen' }, { status: 500 });
   }
 }

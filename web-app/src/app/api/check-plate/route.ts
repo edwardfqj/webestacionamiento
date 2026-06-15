@@ -61,7 +61,23 @@ export async function POST(request: NextRequest) {
       text = result.response.text().trim();
     } catch (e: any) {
       console.error('Error detallado de Gemini:', e);
-      throw e; // Lanzar el error real para que se muestre en UI
+      
+      // Si da 404, intentar listar los modelos para ver a cuáles tiene acceso la llave
+      let availableModels = 'No se pudo obtener lista de modelos';
+      if (e.message && e.message.includes('404')) {
+        try {
+          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
+          const data = await res.json();
+          if (data.models) {
+            availableModels = data.models.map((m: any) => m.name.replace('models/', '')).join(', ');
+          }
+        } catch (fetchErr) {
+          availableModels = 'Error al listar: ' + String(fetchErr);
+        }
+        throw new Error(`[ERROR DE LLAVE] Tu API Key no tiene acceso a gemini-1.5-flash. Modelos que sí tienes permitidos: ${availableModels}`);
+      }
+      
+      throw e; // Lanzar el error real
     }
 
     if (text === 'NULL' || text === '') {

@@ -4,7 +4,7 @@ import { sql } from '@/lib/db';
 // GET /api/clients — lista todos los clientes
 export async function GET() {
   try {
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT id, cedula, nombre, placa, pagado, created_at, updated_at
       FROM clientes
       ORDER BY nombre ASC
@@ -32,15 +32,16 @@ export async function POST(request: NextRequest) {
     const placaUpper = placa.toUpperCase().trim();
     const cedulaTrim = cedula.trim();
 
-    const { rows } = await sql`
+    const rows = await sql`
       INSERT INTO clientes (cedula, nombre, placa, pagado)
       VALUES (${cedulaTrim}, ${nombre.trim()}, ${placaUpper}, ${pagado})
       RETURNING *
     `;
 
     return NextResponse.json({ client: rows[0] }, { status: 201 });
-  } catch (error: any) {
-    if (error?.code === '23505') {
+  } catch (error: unknown) {
+    const dbError = error as { code?: string };
+    if (dbError?.code === '23505') {
       return NextResponse.json(
         { error: 'La cédula o placa ya están registradas' },
         { status: 409 }

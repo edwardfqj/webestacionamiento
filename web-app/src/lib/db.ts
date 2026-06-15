@@ -1,6 +1,17 @@
-import { sql } from '@vercel/postgres';
+import { neon } from '@neondatabase/serverless';
 
-export { sql };
+// Crear cliente SQL usando la variable de entorno de Neon/Vercel Postgres
+// La variable POSTGRES_URL se configura automáticamente al conectar Neon en Vercel
+// También puede llamarse DATABASE_URL según la configuración
+function getSQL() {
+  const databaseUrl = process.env.POSTGRES_URL || process.env.DATABASE_URL;
+  if (!databaseUrl) {
+    throw new Error('POSTGRES_URL o DATABASE_URL no está configurada en las variables de entorno');
+  }
+  return neon(databaseUrl);
+}
+
+export const sql = getSQL();
 
 export type Cliente = {
   id: number;

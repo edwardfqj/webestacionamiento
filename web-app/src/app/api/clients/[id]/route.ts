@@ -4,10 +4,11 @@ import { sql } from '@/lib/db';
 // PATCH /api/clients/[id] — actualizar cliente (pagado, nombre, etc.)
 export async function PATCH(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
+    const { id: idStr } = await params;
+    const id = parseInt(idStr);
     if (isNaN(id)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
     }
@@ -35,7 +36,7 @@ export async function PATCH(
       `;
     }
 
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT * FROM clientes WHERE id = ${id}
     `;
 
@@ -44,8 +45,9 @@ export async function PATCH(
     }
 
     return NextResponse.json({ client: rows[0] });
-  } catch (error: any) {
-    if (error?.code === '23505') {
+  } catch (error: unknown) {
+    const dbError = error as { code?: string };
+    if (dbError?.code === '23505') {
       return NextResponse.json(
         { error: 'La cédula o placa ya están en uso' },
         { status: 409 }
@@ -59,19 +61,20 @@ export async function PATCH(
 // DELETE /api/clients/[id] — eliminar cliente
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const id = parseInt(params.id);
+    const { id: idStr } = await params;
+    const id = parseInt(idStr);
     if (isNaN(id)) {
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
     }
 
-    const { rowCount } = await sql`
-      DELETE FROM clientes WHERE id = ${id}
+    const rows = await sql`
+      DELETE FROM clientes WHERE id = ${id} RETURNING id
     `;
 
-    if (rowCount === 0) {
+    if (rows.length === 0) {
       return NextResponse.json({ error: 'Cliente no encontrado' }, { status: 404 });
     }
 

@@ -30,7 +30,7 @@ function extractPlate(rawText: string): string {
 
 // POST /api/check-plate — recibe imagen, hace OCR, verifica pago
 export async function POST(request: NextRequest) {
-  let worker = null;
+  let worker: Awaited<ReturnType<typeof createWorker>> | null = null;
   try {
     const formData = await request.formData();
     const imageFile = formData.get('image') as File | null;
@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
 
     const { data: { text } } = await worker.recognize(buffer);
     await worker.terminate();
+    worker = null;
 
     const detectedPlate = extractPlate(text);
 
@@ -68,13 +69,13 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar en base de datos
-    const { rows } = await sql`
+    const rows = await sql`
       SELECT id, cedula, nombre, placa, pagado
       FROM clientes
       WHERE placa = ${detectedPlate}
     `;
 
-    const cliente = rows[0];
+    const cliente = rows[0] as { id: number; cedula: string; nombre: string; placa: string; pagado: boolean } | undefined;
     const approved = cliente?.pagado === true;
     const resultado = approved ? 'permitido' : 'denegado';
 
@@ -86,7 +87,7 @@ export async function POST(request: NextRequest) {
         ${cliente?.cedula ?? null},
         ${cliente?.nombre ?? null},
         ${resultado},
-        'camara'
+        ${'camara'}
       )
     `;
 
@@ -103,8 +104,8 @@ export async function POST(request: NextRequest) {
       approved,
       placa: detectedPlate,
       raw_text: text,
-      cliente: approved ? { nombre: cliente.nombre, cedula: cliente.cedula } : null,
-      message: approved
+      cliente: approved && cliente ? { nombre: cliente.nombre, cedula: cliente.cedula } : null,
+      message: approved && cliente
         ? `✅ Acceso permitido — ${cliente.nombre}`
         : cliente
           ? '❌ Vehículo no ha pagado'
@@ -113,7 +114,7 @@ export async function POST(request: NextRequest) {
 
   } catch (error) {
     if (worker) {
-      try { await (worker as any).terminate(); } catch {}
+      try { await worker.terminate(); } catch (_e) { /* ignore */ }
     }
     console.error('Error en check-plate:', error);
     return NextResponse.json({ error: 'Error procesando la imagen' }, { status: 500 });

@@ -111,7 +111,7 @@ export default function ScanPage() {
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontSize: 20 }}>📷</span>
-          <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Escáner de Placas</span>
+          <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Escáner de Placas v4</span>
         </div>
         <Link href="/" className="btn btn-secondary btn-sm">← Panel</Link>
       </div>

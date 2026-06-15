@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback, useEffect } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import Webcam from 'react-webcam';
 
 type ScanResult = {
   approved: boolean;
@@ -14,9 +15,7 @@ type ScanResult = {
 type ScanStatus = 'idle' | 'camera' | 'processing' | 'result';
 
 export default function ScanPage() {
-  const videoRef = useRef<HTMLVideoElement>(null);
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const streamRef = useRef<MediaStream | null>(null);
+  const webcamRef = useRef<Webcam>(null);
 
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -24,80 +23,26 @@ export default function ScanPage() {
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
 
-  // Limpiar stream al salir
-  useEffect(() => {
-    return () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(t => t.stop());
-      }
-    };
-  }, []);
-
-  const startCamera = useCallback(async () => {
+  const startCamera = () => {
     setErrorMsg('');
-    try {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        throw new Error('API de cámara no soportada en este navegador (requiere HTTPS)');
-      }
+    setStatus('camera');
+  };
 
-      let stream;
-      try {
-        // Intentar primero con la cámara trasera sin restricciones estrictas de resolución
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment' },
-        });
-      } catch (err) {
-        // Fallback: cualquier cámara
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
-        });
-      }
-      
-      streamRef.current = stream;
-      
-      // Asignar el stream directamente de forma síncrona dentro del evento de click
-      // Esto es crucial para que iOS Safari permita el autoplay
-      if (videoRef.current) {
-        const video = videoRef.current;
-        video.srcObject = stream;
-        video.setAttribute('playsinline', 'true');
-        // Usar onloadedmetadata como medida extra de seguridad
-        video.onloadedmetadata = () => {
-          video.play().catch(e => console.error('Error al iniciar video:', e));
-        };
-      }
-      
-      setStatus('camera'); // Solo cambia CSS para mostrar el contenedor
-
-    } catch (err) {
-      setStatus('idle');
-      setErrorMsg('No se pudo acceder a la cámara. Revisa permisos y asegúrate de usar HTTPS.');
-      console.error(err);
-    }
-  }, []);
-
-  const stopCamera = useCallback(() => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach(t => t.stop());
-      streamRef.current = null;
-    }
-  }, []);
+  const stopCamera = () => {
+    setStatus('idle');
+  };
 
   const captureAndSend = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current) return;
+    if (!webcamRef.current) return;
 
-    // Capturar frame del video
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    // Obtener la imagen en base64 usando react-webcam
+    const imageSrc = webcamRef.current.getScreenshot({ width: 1920, height: 1080 });
+    if (!imageSrc) {
+      setErrorMsg('No se pudo capturar la imagen. Intenta de nuevo.');
+      return;
+    }
 
-    canvas.width = videoRef.current.videoWidth;
-    canvas.height = videoRef.current.videoHeight;
-    ctx.drawImage(videoRef.current, 0, 0);
-
-    const imageDataUrl = canvas.toDataURL('image/jpeg', 0.92);
-    setCapturedImage(imageDataUrl);
-    stopCamera();
+    setCapturedImage(imageSrc);
     setStatus('processing');
 
     // Animación de progreso
@@ -110,7 +55,7 @@ export default function ScanPage() {
 
     try {
       // Convertir dataURL a Blob
-      const res = await fetch(imageDataUrl);
+      const res = await fetch(imageSrc);
       const blob = await res.blob();
 
       const formData = new FormData();
@@ -137,7 +82,7 @@ export default function ScanPage() {
       });
       setStatus('result');
     }
-  }, [stopCamera]);
+  }, []);
 
   const reset = () => {
     setStatus('idle');
@@ -145,6 +90,13 @@ export default function ScanPage() {
     setCapturedImage(null);
     setProgress(0);
     setErrorMsg('');
+  };
+
+  // Restricciones de cámara: buscar cámara trasera por defecto
+  const videoConstraints = {
+    facingMode: 'environment',
+    width: { ideal: 1920 },
+    height: { ideal: 1080 }
   };
 
   return (
@@ -166,8 +118,8 @@ export default function ScanPage() {
 
       <div style={{ marginTop: 56, width: '100%', maxWidth: 480, padding: '1.5rem' }}>
 
-        {/* CONTENEDOR PRINCIPAL: Renderizado condicional mediante CSS para evitar bugs de autoplay en móviles */}
-        <div style={{ display: status === 'idle' ? 'block' : 'none' }}>
+        {/* ESTADO: IDLE */}
+        {status === 'idle' && (
           <div className="scan-card" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '5rem', marginBottom: '1.5rem', lineHeight: 1 }}>🚗</div>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: 8 }}>
@@ -205,23 +157,29 @@ export default function ScanPage() {
               💡 Asegúrate de enfocar bien la placa y que haya buena iluminación
             </div>
           </div>
-        </div>
+        )}
 
-        {/* CONTENEDOR DE CÁMARA: Siempre en el DOM, solo se oculta */}
-        <div style={{ display: status === 'camera' ? 'block' : 'none' }}>
+        {/* ESTADO: CAMERA */}
+        {status === 'camera' && (
           <div className="scan-card">
             <h3 style={{ marginBottom: '1rem', fontWeight: 600, textAlign: 'center', fontSize: '0.95rem' }}>
               🎯 Enfoca la placa del vehículo
             </h3>
 
             <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
-              {/* VIDEO SIEMPRE RENDERIZADO */}
-              <video
-                ref={videoRef}
+              
+              {/* COMPONENTE REACT-WEBCAM: Solución definitiva */}
+              <Webcam
+                audio={false}
+                ref={webcamRef}
+                screenshotFormat="image/jpeg"
+                videoConstraints={videoConstraints}
+                onUserMediaError={(err) => {
+                  setStatus('idle');
+                  setErrorMsg('No se pudo acceder a la cámara. Revisa permisos o intenta con HTTPS.');
+                  console.error('Webcam Error:', err);
+                }}
                 className="camera-preview"
-                playsInline
-                muted
-                autoPlay
                 style={{ width: '100%', display: 'block', backgroundColor: '#000' }}
               />
               
@@ -265,7 +223,7 @@ export default function ScanPage() {
               <button
                 className="btn btn-secondary"
                 style={{ flex: 1, justifyContent: 'center' }}
-                onClick={() => { stopCamera(); setStatus('idle'); }}
+                onClick={stopCamera}
                 id="btn-cancel-camera"
               >
                 ✕ Cancelar
@@ -280,7 +238,7 @@ export default function ScanPage() {
               </button>
             </div>
           </div>
-        </div>
+        )}
 
         {/* ESTADO: PROCESSING */}
         {status === 'processing' && (
@@ -383,9 +341,6 @@ export default function ScanPage() {
           </div>
         )}
       </div>
-
-      {/* Canvas oculto para captura */}
-      <canvas ref={canvasRef} style={{ display: 'none' }} />
     </div>
   );
 }

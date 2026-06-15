@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
     const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
     
     const imagePart = {
@@ -61,23 +61,7 @@ export async function POST(request: NextRequest) {
       text = result.response.text().trim();
     } catch (e: any) {
       console.error('Error detallado de Gemini:', e);
-      
-      // Si da 404, intentar listar los modelos para ver a cuáles tiene acceso la llave
-      let availableModels = 'No se pudo obtener lista de modelos';
-      if (e.message && e.message.includes('404')) {
-        try {
-          const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${process.env.GEMINI_API_KEY}`);
-          const data = await res.json();
-          if (data.models) {
-            availableModels = data.models.map((m: any) => m.name.replace('models/', '')).join(', ');
-          }
-        } catch (fetchErr) {
-          availableModels = 'Error al listar: ' + String(fetchErr);
-        }
-        throw new Error(`[ERROR DE LLAVE] Tu API Key no tiene acceso a gemini-1.5-flash. Modelos que sí tienes permitidos: ${availableModels}`);
-      }
-      
-      throw e; // Lanzar el error real
+      throw e; // Lanzar el error real para que se muestre en UI si es que falla
     }
 
     if (text === 'NULL' || text === '') {

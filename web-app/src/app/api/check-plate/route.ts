@@ -45,21 +45,38 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-    // Usar el modelo Flash súper rápido
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    // Lista de modelos a intentar si falla uno (Google a veces actualiza los alias)
+    const modelNames = ['gemini-1.5-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro', 'gemini-pro-vision'];
     
-    const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
-    
-    const imagePart = {
-      inlineData: {
-        data: base64Image,
-        mimeType: imageFile.type || 'image/jpeg',
-      },
-    };
+    let text = '';
+    let success = false;
+    let lastError = null;
 
-    // Llamada a la IA (tarda ~1 segundo)
-    const result = await model.generateContent([prompt, imagePart]);
-    const text = result.response.text().trim();
+    for (const modelName of modelNames) {
+      try {
+        const model = genAI.getGenerativeModel({ model: modelName });
+        const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
+        
+        const imagePart = {
+          inlineData: {
+            data: base64Image,
+            mimeType: imageFile.type || 'image/jpeg',
+          },
+        };
+
+        const result = await model.generateContent([prompt, imagePart]);
+        text = result.response.text().trim();
+        success = true;
+        break; // Si tiene éxito, salimos del loop
+      } catch (e) {
+        lastError = e;
+        console.warn(`Falló el modelo ${modelName}:`, e);
+      }
+    }
+
+    if (!success) {
+      throw lastError;
+    }
 
     if (text === 'NULL' || text === '') {
       return NextResponse.json({

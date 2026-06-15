@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { getSQL } from '@/lib/db';
 
 // PATCH /api/clients/[id] — actualizar cliente (pagado, nombre, etc.)
 export async function PATCH(
@@ -15,6 +15,8 @@ export async function PATCH(
 
     const body = await request.json();
     const { pagado, nombre, cedula, placa } = body;
+
+    const sql = getSQL();
 
     // Actualizar solo los campos enviados
     if (pagado !== undefined) {
@@ -70,6 +72,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'ID inválido' }, { status: 400 });
     }
 
+    const sql = getSQL();
     const rows = await sql`
       DELETE FROM clientes WHERE id = ${id} RETURNING id
     `;

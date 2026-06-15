@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createWorker } from 'tesseract.js';
-import { sql } from '@/lib/db';
+import { getSQL } from '@/lib/db';
 
 // Función para limpiar y normalizar el texto de la placa
 function extractPlate(rawText: string): string {
@@ -50,7 +50,6 @@ export async function POST(request: NextRequest) {
 
     await worker.setParameters({
       tessedit_char_whitelist: 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789',
-      tessedit_pageseg_mode: '8', // Tratar como una sola palabra
     });
 
     const { data: { text } } = await worker.recognize(buffer);
@@ -69,6 +68,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Buscar en base de datos
+    const sql = getSQL();
     const rows = await sql`
       SELECT id, cedula, nombre, placa, pagado
       FROM clientes

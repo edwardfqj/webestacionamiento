@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { getSQL } from '@/lib/db';
 
 // GET /api/clients — lista todos los clientes
 export async function GET() {
   try {
+    const sql = getSQL();
     const rows = await sql`
       SELECT id, cedula, nombre, placa, pagado, created_at, updated_at
       FROM clientes
@@ -32,6 +33,7 @@ export async function POST(request: NextRequest) {
     const placaUpper = placa.toUpperCase().trim();
     const cedulaTrim = cedula.trim();
 
+    const sql = getSQL();
     const rows = await sql`
       INSERT INTO clientes (cedula, nombre, placa, pagado)
       VALUES (${cedulaTrim}, ${nombre.trim()}, ${placaUpper}, ${pagado})

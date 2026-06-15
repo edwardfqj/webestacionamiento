@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { sql } from '@/lib/db';
+import { getSQL } from '@/lib/db';
 
 // GET /api/gate-status — el ESP32 consulta este endpoint para saber si debe abrir
 export async function GET(request: NextRequest) {
@@ -12,6 +12,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const sql = getSQL();
     const rows = await sql`
       SELECT status, placa_scan, updated_at
       FROM gate_status
@@ -43,6 +44,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const sql = getSQL();
     await sql`
       UPDATE gate_status
       SET status = 'closed', updated_at = NOW()

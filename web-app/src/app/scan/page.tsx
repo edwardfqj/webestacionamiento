@@ -168,7 +168,7 @@ export default function ScanPage() {
 
             <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
               
-              {/* COMPONENTE REACT-WEBCAM: Solución definitiva */}
+              {/* COMPONENTE REACT-WEBCAM */}
               <Webcam
                 audio={false}
                 ref={webcamRef}
@@ -180,7 +180,6 @@ export default function ScanPage() {
                   console.error('Webcam Error:', err);
                 }}
                 className="camera-preview"
-                style={{ width: '100%', display: 'block', backgroundColor: '#000' }}
               />
               
               {/* Overlay con marco de escaneo */}

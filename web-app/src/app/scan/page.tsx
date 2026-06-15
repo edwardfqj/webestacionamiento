@@ -302,7 +302,7 @@ export default function ScanPage() {
               )}
 
               <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                {result.message}
+                {result.message || result.error || 'Ocurrió un problema inesperado.'}
               </p>
 
               {result.approved && result.cliente && (

@@ -126,8 +126,8 @@ export async function POST(request: NextRequest) {
           : '❌ Placa no registrada en el sistema',
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('Error en check-plate (IA):', error);
-    return NextResponse.json({ error: 'Error interno en la IA procesando la imagen' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Error interno en la IA procesando la imagen' }, { status: 500 });
   }
 }

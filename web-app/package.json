@@ -10,7 +10,7 @@
   },
   "dependencies": {
     "@neondatabase/serverless": "^0.10.4",
-    "next": "15.3.3",
+    "next": "15.3.8",
     "react": "^19",
     "react-dom": "^19",
     "tesseract.js": "^5.1.1"

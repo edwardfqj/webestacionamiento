@@ -35,8 +35,8 @@ export default function ScanPage() {
   const captureAndSend = useCallback(async () => {
     if (!webcamRef.current) return;
 
-    // Obtener la imagen en base64 usando react-webcam
-    const imageSrc = webcamRef.current.getScreenshot({ width: 1920, height: 1080 });
+    // Obtener la imagen en base64 usando react-webcam pero más pequeña para que el OCR sea rápido
+    const imageSrc = webcamRef.current.getScreenshot({ width: 1280, height: 720 });
     if (!imageSrc) {
       setErrorMsg('No se pudo capturar la imagen. Intenta de nuevo.');
       return;

@@ -43,8 +43,8 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    // OCR con Tesseract.js
-    worker = await createWorker('spa+eng', 1, {
+    // OCR con Tesseract.js (solo 'eng' es mucho más rápido y suficiente para placas)
+    worker = await createWorker('eng', 1, {
       logger: () => {}, // silenciar logs
     });
 

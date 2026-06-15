@@ -36,42 +36,46 @@ export default function ScanPage() {
   const startCamera = useCallback(async () => {
     setErrorMsg('');
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('API de cámara no soportada en este navegador (requiere HTTPS)');
+      }
+
       let stream;
       try {
-        // Intentar primero con la cámara trasera (environment)
+        // Intentar primero con la cámara trasera sin restricciones estrictas de resolución
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: { facingMode: 'environment' },
         });
       } catch (err) {
-        // Si falla (ej: PC sin cámara trasera), intentar con cualquier cámara disponible
+        // Fallback: cualquier cámara
         stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+          video: true,
         });
       }
       
       streamRef.current = stream;
-      // Primero cambiamos el estado para que React dibuje la etiqueta <video>
-      setStatus('camera');
-      
-      // Esperamos un instante para que videoRef.current ya no sea null
-      setTimeout(async () => {
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          videoRef.current.setAttribute('playsinline', 'true');
-          try {
-            await videoRef.current.play();
-          } catch (e) {
-            console.error('Error reproduciendo el video:', e);
-          }
-        }
-      }, 100);
+      setStatus('camera'); // Esto renderizará el <video>
 
     } catch (err) {
       setStatus('idle');
-      setErrorMsg('No se pudo acceder a la cámara. Verifica los permisos y que estés usando HTTPS.');
+      setErrorMsg('No se pudo acceder a la cámara. Revisa permisos y asegúrate de usar HTTPS.');
       console.error(err);
     }
   }, []);
+
+  // Efecto robusto para asegurar que el stream se asigne cuando el video se renderiza
+  useEffect(() => {
+    if (status === 'camera' && videoRef.current && streamRef.current) {
+      const video = videoRef.current;
+      video.srcObject = streamRef.current;
+      video.setAttribute('playsinline', 'true'); // Importante iOS
+      
+      // Asegurar que inicie solo cuando tenga metadata lista
+      video.onloadedmetadata = () => {
+        video.play().catch(e => console.error('Error al iniciar video:', e));
+      };
+    }
+  }, [status]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {

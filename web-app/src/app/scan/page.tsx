@@ -54,7 +54,20 @@ export default function ScanPage() {
       }
       
       streamRef.current = stream;
-      setStatus('camera'); // Esto renderizará el <video>
+      
+      // Asignar el stream directamente de forma síncrona dentro del evento de click
+      // Esto es crucial para que iOS Safari permita el autoplay
+      if (videoRef.current) {
+        const video = videoRef.current;
+        video.srcObject = stream;
+        video.setAttribute('playsinline', 'true');
+        // Usar onloadedmetadata como medida extra de seguridad
+        video.onloadedmetadata = () => {
+          video.play().catch(e => console.error('Error al iniciar video:', e));
+        };
+      }
+      
+      setStatus('camera'); // Solo cambia CSS para mostrar el contenedor
 
     } catch (err) {
       setStatus('idle');
@@ -62,20 +75,6 @@ export default function ScanPage() {
       console.error(err);
     }
   }, []);
-
-  // Efecto robusto para asegurar que el stream se asigne cuando el video se renderiza
-  useEffect(() => {
-    if (status === 'camera' && videoRef.current && streamRef.current) {
-      const video = videoRef.current;
-      video.srcObject = streamRef.current;
-      video.setAttribute('playsinline', 'true'); // Importante iOS
-      
-      // Asegurar que inicie solo cuando tenga metadata lista
-      video.onloadedmetadata = () => {
-        video.play().catch(e => console.error('Error al iniciar video:', e));
-      };
-    }
-  }, [status]);
 
   const stopCamera = useCallback(() => {
     if (streamRef.current) {
@@ -167,8 +166,8 @@ export default function ScanPage() {
 
       <div style={{ marginTop: 56, width: '100%', maxWidth: 480, padding: '1.5rem' }}>
 
-        {/* ESTADO: IDLE */}
-        {status === 'idle' && (
+        {/* CONTENEDOR PRINCIPAL: Renderizado condicional mediante CSS para evitar bugs de autoplay en móviles */}
+        <div style={{ display: status === 'idle' ? 'block' : 'none' }}>
           <div className="scan-card" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: '5rem', marginBottom: '1.5rem', lineHeight: 1 }}>🚗</div>
             <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: 8 }}>
@@ -206,23 +205,26 @@ export default function ScanPage() {
               💡 Asegúrate de enfocar bien la placa y que haya buena iluminación
             </div>
           </div>
-        )}
+        </div>
 
-        {/* ESTADO: CAMERA */}
-        {status === 'camera' && (
+        {/* CONTENEDOR DE CÁMARA: Siempre en el DOM, solo se oculta */}
+        <div style={{ display: status === 'camera' ? 'block' : 'none' }}>
           <div className="scan-card">
             <h3 style={{ marginBottom: '1rem', fontWeight: 600, textAlign: 'center', fontSize: '0.95rem' }}>
               🎯 Enfoca la placa del vehículo
             </h3>
 
             <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+              {/* VIDEO SIEMPRE RENDERIZADO */}
               <video
                 ref={videoRef}
                 className="camera-preview"
                 playsInline
                 muted
                 autoPlay
+                style={{ width: '100%', display: 'block', backgroundColor: '#000' }}
               />
+              
               {/* Overlay con marco de escaneo */}
               <div style={{
                 position: 'absolute', inset: 0,
@@ -278,7 +280,7 @@ export default function ScanPage() {
               </button>
             </div>
           </div>
-        )}
+        </div>
 
         {/* ESTADO: PROCESSING */}
         {status === 'processing' && (

@@ -50,14 +50,24 @@ export default function ScanPage() {
       }
       
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        // Importante para algunos navegadores móviles
-        videoRef.current.setAttribute('playsinline', 'true');
-        await videoRef.current.play();
-      }
+      // Primero cambiamos el estado para que React dibuje la etiqueta <video>
       setStatus('camera');
+      
+      // Esperamos un instante para que videoRef.current ya no sea null
+      setTimeout(async () => {
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.setAttribute('playsinline', 'true');
+          try {
+            await videoRef.current.play();
+          } catch (e) {
+            console.error('Error reproduciendo el video:', e);
+          }
+        }
+      }, 100);
+
     } catch (err) {
+      setStatus('idle');
       setErrorMsg('No se pudo acceder a la cámara. Verifica los permisos y que estés usando HTTPS.');
       console.error(err);
     }

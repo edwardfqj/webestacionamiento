@@ -36,21 +36,29 @@ export default function ScanPage() {
   const startCamera = useCallback(async () => {
     setErrorMsg('');
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: {
-          facingMode: 'environment', // cámara trasera
-          width: { ideal: 1920 },
-          height: { ideal: 1080 },
-        },
-      });
+      let stream;
+      try {
+        // Intentar primero con la cámara trasera (environment)
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { facingMode: 'environment', width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+      } catch (err) {
+        // Si falla (ej: PC sin cámara trasera), intentar con cualquier cámara disponible
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 1920 }, height: { ideal: 1080 } },
+        });
+      }
+      
       streamRef.current = stream;
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
+        // Importante para algunos navegadores móviles
+        videoRef.current.setAttribute('playsinline', 'true');
         await videoRef.current.play();
       }
       setStatus('camera');
     } catch (err) {
-      setErrorMsg('No se pudo acceder a la cámara. Verifica los permisos.');
+      setErrorMsg('No se pudo acceder a la cámara. Verifica los permisos y que estés usando HTTPS.');
       console.error(err);
     }
   }, []);

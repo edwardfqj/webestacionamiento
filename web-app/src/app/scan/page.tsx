@@ -9,29 +9,25 @@ type ScanResult = {
   placa: string | null;
   message: string;
   cliente?: { nombre: string; cedula: string } | null;
-  error?: string;
 };
 
 type ScanStatus = 'idle' | 'camera' | 'processing' | 'result';
 
 export default function ScanPage() {
   const webcamRef = useRef<Webcam>(null);
-  const isScanningRef = useRef(false); // Para evitar solapamientos en modo auto
+  const isScanningRef = useRef(false);
 
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [result, setResult] = useState<ScanResult | null>(null);
   const [errorMsg, setErrorMsg] = useState('');
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
-  const [progress, setProgress] = useState(0);
-
-  // Estados del Modo Automático
+  
   const [isAutoMode, setIsAutoMode] = useState(true);
   const [isScanningBg, setIsScanningBg] = useState(false);
 
   const startCamera = () => {
     setErrorMsg('');
     setStatus('camera');
-    setIsAutoMode(true); // Siempre encender auto-mode al abrir la cámara
+    setIsAutoMode(true);
   };
 
   const stopCamera = () => {
@@ -40,39 +36,24 @@ export default function ScanPage() {
   };
 
   const reset = useCallback(() => {
-    setStatus('camera'); // Regresar directo a la cámara para el siguiente auto
+    setStatus('camera');
     setResult(null);
-    setCapturedImage(null);
-    setProgress(0);
     setErrorMsg('');
     setIsAutoMode(true);
   }, []);
 
   const captureAndSend = useCallback(async (isBackground = false) => {
-    if (!webcamRef.current) return;
-    if (isScanningRef.current) return;
+    if (!webcamRef.current || isScanningRef.current) return;
 
     const imageSrc = webcamRef.current.getScreenshot({ width: 1280, height: 720 });
     if (!imageSrc) {
-      if (!isBackground) setErrorMsg('No se pudo capturar la imagen. Intenta de nuevo.');
+      if (!isBackground) setErrorMsg('Error de captura local.');
       return;
     }
 
     isScanningRef.current = true;
-    let interval: NodeJS.Timeout | undefined;
-
-    if (!isBackground) {
-      setCapturedImage(imageSrc);
-      setStatus('processing');
-      let prog = 0;
-      interval = setInterval(() => {
-        prog += Math.random() * 15;
-        if (prog > 90) { clearInterval(interval); prog = 90; }
-        setProgress(Math.min(prog, 90));
-      }, 200);
-    } else {
-      setIsScanningBg(true);
-    }
+    if (!isBackground) setStatus('processing');
+    else setIsScanningBg(true);
 
     try {
       const res = await fetch(imageSrc);
@@ -80,58 +61,24 @@ export default function ScanPage() {
       const formData = new FormData();
       formData.append('image', blob, 'plate.jpg');
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-      const response = await fetch('/api/check-plate', {
-        method: 'POST',
-        body: formData,
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-      if (interval) clearInterval(interval);
-      if (!isBackground) setProgress(100);
-
-      if (!response.ok) {
-        throw new Error(`Error HTTP: ${response.status}`);
-      }
-
+      const response = await fetch('/api/check-plate', { method: 'POST', body: formData });
+      if (!response.ok) throw new Error('Network response was not ok');
       const data = await response.json();
 
       if (isBackground) {
-        // En modo fondo, solo interrumpir si encontró una placa válida
         if (data.placa) {
-          setCapturedImage(imageSrc);
           setResult(data);
           setStatus('result');
-          setIsAutoMode(false); // Apagar radar mientras mostramos resultado
-          
-          // Si el acceso es permitido, volver automáticamente a escanear después de 8 segundos (tiempo que tarda el auto en pasar)
-          if (data.approved) {
-            setTimeout(() => {
-              reset();
-            }, 8000);
-          }
+          setIsAutoMode(false);
+          if (data.approved) setTimeout(reset, 8000);
         }
       } else {
         setResult(data);
         setStatus('result');
       }
-    } catch (err: any) {
-      if (interval) clearInterval(interval);
-      console.error("Fetch Error:", err);
-      
+    } catch {
       if (!isBackground) {
-        const isTimeout = err.name === 'AbortError';
-        setResult({
-          approved: false,
-          placa: null,
-          message: isTimeout 
-            ? 'Los servidores de IA están saturados (Tiempo excedido). Intenta de nuevo.' 
-            : 'Error de conexión con el servidor. Revisa tu internet.',
-          error: isTimeout ? 'timeout' : 'network_error',
-        });
+        setResult({ approved: false, placa: null, message: 'Connection Error' });
         setStatus('result');
       }
     } finally {
@@ -140,253 +87,109 @@ export default function ScanPage() {
     }
   }, [reset]);
 
-  // Bucle del Modo Automático
   useEffect(() => {
     if (status !== 'camera' || !isAutoMode) return;
-
-    // Ejecutar cada 4 segundos para respetar el límite de Gemini (15 RPM)
-    const timer = setInterval(() => {
-      captureAndSend(true);
-    }, 4000);
-
+    const timer = setInterval(() => captureAndSend(true), 4000);
     return () => clearInterval(timer);
   }, [status, isAutoMode, captureAndSend]);
 
-  const videoConstraints = {
-    facingMode: 'environment',
-    width: { ideal: 1920 },
-    height: { ideal: 1080 }
-  };
-
   return (
-    <div className="scan-container">
-      {/* Header */}
-      <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 100,
-        background: 'rgba(10,14,26,0.9)', backdropFilter: 'blur(20px)',
-        borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        padding: '0 1.5rem', height: 56,
-      }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <span style={{ fontSize: 20 }}>📷</span>
-          <span style={{ fontWeight: 700, fontSize: '0.95rem' }}>Radar Automático</span>
+    <div className="scan-wrapper">
+      <nav className="navbar">
+        <Link href="/" className="navbar-brand">
+          <div className="navbar-logo">P</div>
+          <div><div className="navbar-title">Scanner Node</div></div>
+        </Link>
+        <div className="navbar-nav">
+          <Link href="/" className="nav-link">Dashboard</Link>
+          <Link href="/scan" className="nav-link active">Scanner</Link>
         </div>
-        <Link href="/" className="btn btn-secondary btn-sm">← Panel</Link>
-      </div>
+      </nav>
 
-      <div style={{ marginTop: 56, width: '100%', maxWidth: 480, padding: '1.5rem' }}>
-
-        {/* ESTADO: IDLE */}
+      <main className="scan-main">
         {status === 'idle' && (
-          <div className="scan-card" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: '5rem', marginBottom: '1.5rem', lineHeight: 1 }}>🚗</div>
-            <h2 style={{ fontSize: '1.3rem', fontWeight: 700, marginBottom: 8 }}>
-              Control de Acceso
-            </h2>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.875rem', marginBottom: '2rem' }}>
-              El sistema utilizará la cámara para escanear placas automáticamente.
+          <div style={{ textAlign: 'center', maxWidth: 400 }}>
+            <h2 className="page-title" style={{ marginBottom: '1rem' }}>ALPR System</h2>
+            <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
+              Sistema de reconocimiento automático de placas. Coloque la cámara apuntando hacia el acceso vehicular.
             </p>
-
-            {errorMsg && (
-              <div style={{
-                background: 'rgba(255,71,87,0.1)', border: '1px solid rgba(255,71,87,0.3)',
-                borderRadius: 'var(--radius-md)', padding: '12px 16px',
-                color: 'var(--accent-red)', fontSize: '0.875rem', marginBottom: '1rem',
-              }}>
-                ⚠️ {errorMsg}
-              </div>
-            )}
-
-            <button
-              className="btn btn-primary"
-              onClick={startCamera}
-              style={{ width: '100%', justifyContent: 'center', padding: '14px', fontSize: '1rem' }}
-            >
-              📡 Activar Radar Automático
+            {errorMsg && <div style={{ color: 'var(--color-error)', marginBottom: '1rem', fontSize: '0.85rem' }}>{errorMsg}</div>}
+            <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={startCamera}>
+              Inicializar Módulo
             </button>
           </div>
         )}
 
-        {/* ESTADO: CAMERA */}
         {status === 'camera' && (
-          <div className="scan-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
-              <h3 style={{ fontWeight: 600, fontSize: '0.95rem' }}>
-                🎯 Enfoca la placa
-              </h3>
-              {isAutoMode && (
-                <div style={{ 
-                  display: 'flex', alignItems: 'center', gap: 6,
-                  background: 'rgba(204, 255, 0, 0.1)', padding: '4px 8px',
-                  borderRadius: 20, border: '1px solid rgba(204, 255, 0, 0.3)',
-                  color: 'var(--accent-cyan)', fontSize: '0.75rem', fontWeight: 700
-                }}>
-                  <div className={`pulse-dot ${isScanningBg ? 'active' : ''}`} />
-                  {isScanningBg ? 'Analizando...' : 'Radar Activo'}
-                </div>
-              )}
-            </div>
-
-            <div style={{ position: 'relative', borderRadius: 'var(--radius-lg)', overflow: 'hidden' }}>
+          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div className="camera-box">
               <Webcam
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={videoConstraints}
-                onUserMediaError={(err) => {
-                  setStatus('idle');
-                  setErrorMsg('No se pudo acceder a la cámara. Revisa permisos.');
-                  console.error('Webcam Error:', err);
-                }}
-                className="camera-preview"
+                videoConstraints={{ facingMode: 'environment', width: 1920, height: 1080 }}
+                className="camera-video"
               />
-              
-              <div style={{
-                position: 'absolute', inset: 0,
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                <div style={{
-                  width: 260, height: 80,
-                  border: `2px solid ${isScanningBg ? 'var(--accent-cyan)' : 'rgba(255,255,255,0.5)'}`,
-                  borderRadius: 8,
-                  boxShadow: isScanningBg ? 'var(--shadow-cyan)' : 'none',
-                  position: 'relative', overflow: 'hidden',
-                  transition: 'all 0.3s ease'
-                }}>
-                  {isScanningBg && <div className="scan-line" />}
-                </div>
+              <div className="camera-overlay">
+                <div className="focus-frame" />
               </div>
+              {isAutoMode && (
+                <div className="scan-status-pill">
+                  <div className="scan-dot" />
+                  {isScanningBg ? 'Analyzing' : 'Standby'}
+                </div>
+              )}
             </div>
-
-            <div style={{ display: 'flex', gap: 12, marginTop: '1rem' }}>
-              <button
-                className="btn btn-secondary"
-                style={{ flex: 1, justifyContent: 'center' }}
-                onClick={stopCamera}
-              >
-                ✕ Apagar Radar
-              </button>
-              <button
-                className="btn btn-primary"
-                style={{ flex: 1, justifyContent: 'center', background: 'rgba(255,255,255,0.1)' }}
-                onClick={() => captureAndSend(false)}
-                disabled={isScanningBg}
-              >
-                📸 Forzar Captura
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ESTADO: PROCESSING (Solo para captura manual) */}
-        {status === 'processing' && (
-          <div className="scan-card" style={{ textAlign: 'center' }}>
-            {capturedImage && (
-              <img
-                src={capturedImage}
-                alt="Foto capturada"
-                style={{ width: '100%', borderRadius: 'var(--radius-lg)', marginBottom: '1.5rem', maxHeight: 200, objectFit: 'cover' }}
-              />
-            )}
-            <div style={{ fontSize: '2.5rem', marginBottom: '1rem' }}>🔍</div>
-            <h3 style={{ fontWeight: 700, marginBottom: 8 }}>Procesamiento Manual...</h3>
             
-            <div style={{
-              height: 6, background: 'var(--border)',
-              borderRadius: 99, overflow: 'hidden', marginBottom: 8, marginTop: '1rem'
-            }}>
-              <div style={{
-                height: '100%', width: `${progress}%`,
-                background: 'var(--gradient-primary)',
-                borderRadius: 99, transition: 'width 0.2s ease',
-              }} />
+            <div style={{ display: 'flex', gap: '1rem', marginTop: '2rem' }}>
+              <button className="btn btn-secondary" onClick={stopCamera}>Suspender</button>
+              <button className="btn btn-primary" onClick={() => captureAndSend(false)} disabled={isScanningBg}>
+                Forzar Escaneo
+              </button>
             </div>
           </div>
         )}
 
-        {/* ESTADO: RESULT */}
+        {status === 'processing' && (
+          <div style={{ textAlign: 'center' }}>
+            <div className="scan-dot" style={{ width: 16, height: 16, margin: '0 auto 1.5rem auto' }} />
+            <h3 style={{ fontWeight: 500 }}>Procesando frame...</h3>
+          </div>
+        )}
+
         {status === 'result' && result && (
-          <div className="scan-card">
-            {capturedImage && (
-              <img
-                src={capturedImage}
-                alt="Foto capturada"
-                style={{ width: '100%', borderRadius: 'var(--radius-lg)', marginBottom: '1rem', maxHeight: 180, objectFit: 'cover' }}
-              />
-            )}
-
-            <div className={`result-card ${result.approved ? 'approved' : 'denied'}`}>
-              <div className="result-icon">
-                {result.approved ? '✅' : '❌'}
-              </div>
-              <div className={`result-title ${result.approved ? 'approved' : 'denied'}`}>
-                {result.approved ? 'Acceso Permitido' : 'Acceso Denegado'}
-              </div>
-
-              {result.placa && (
-                <div style={{ margin: '12px 0' }}>
-                  <span className="placa-display" style={{ fontSize: '1.2rem', padding: '6px 16px' }}>
-                    {result.placa}
-                  </span>
-                </div>
-              )}
-
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.875rem' }}>
-                {result.message || result.error || 'Ocurrió un problema inesperado.'}
-              </p>
-
+          <div style={{ width: '100%', maxWidth: 400, textAlign: 'center' }}>
+            <div style={{ 
+              padding: '2rem', 
+              borderRadius: 'var(--radius-lg)', 
+              background: 'var(--bg-elevated)', 
+              border: `1px solid ${result.approved ? 'var(--color-success)' : 'var(--color-error)'}` 
+            }}>
+              <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: result.approved ? 'var(--color-success)' : 'var(--color-error)' }}>
+                {result.approved ? 'ACCESO AUTORIZADO' : 'ACCESO DENEGADO'}
+              </h2>
+              {result.placa && <div className="result-placa">{result.placa}</div>}
+              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{result.message}</p>
+              
               {result.approved && result.cliente && (
-                <div style={{
-                  marginTop: 12, padding: '10px 16px',
-                  background: 'rgba(0,255,136,0.05)', borderRadius: 'var(--radius-sm)',
-                  fontSize: '0.8rem', color: 'var(--text-muted)',
-                }}>
-                  👤 {result.cliente.nombre} · CC {result.cliente.cedula}
+                <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)', textAlign: 'left' }}>
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase' }}>Propietario Identificado</div>
+                  <div style={{ fontWeight: 500, fontSize: '1rem', marginTop: '4px' }}>{result.cliente.nombre}</div>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>ID: {result.cliente.cedula}</div>
                 </div>
               )}
             </div>
 
-            <div style={{ display: 'flex', gap: 12, marginTop: '1rem' }}>
+            <div style={{ marginTop: '2rem' }}>
               {result.approved ? (
-                <div style={{
-                  flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  gap: 8, fontSize: '0.8rem', color: 'var(--accent-green)',
-                  background: 'rgba(0,255,136,0.08)', borderRadius: 'var(--radius-sm)',
-                  border: '1px solid rgba(0,255,136,0.2)', padding: '12px', textAlign: 'center'
-                }}>
-                  <span>⏱️</span>
-                  <span>Barrera abriendo... Volviendo al radar en unos segundos.</span>
-                </div>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Restableciendo sistema automáticamente...</p>
               ) : (
-                <button
-                  className="btn btn-secondary"
-                  style={{ flex: 1, justifyContent: 'center' }}
-                  onClick={reset}
-                >
-                  🔄 Volver al Radar
-                </button>
+                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={reset}>Continuar Escaneo</button>
               )}
             </div>
           </div>
         )}
-      </div>
-      
-      {/* Estilos adicionales para animación */}
-      <style dangerouslySetInnerHTML={{__html: `
-        .pulse-dot {
-          width: 8px; height: 8px; background: rgba(204,255,0,0.5); borderRadius: 50%;
-        }
-        .pulse-dot.active {
-          background: var(--accent-cyan);
-          box-shadow: 0 0 8px var(--accent-cyan);
-          animation: pulse 1s infinite alternate;
-        }
-        @keyframes pulse {
-          0% { opacity: 0.5; transform: scale(1); }
-          100% { opacity: 1; transform: scale(1.5); }
-        }
-      `}} />
+      </main>
     </div>
   );
 }

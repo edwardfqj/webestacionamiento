@@ -61,24 +61,39 @@ export default function ScanPage() {
       const formData = new FormData();
       formData.append('image', blob, 'plate.jpg');
 
+      // Crear un controlador de tiempo para abortar la petición a los 8 segundos (antes que Vercel corte a los 10s)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+
       const response = await fetch('/api/check-plate', {
         method: 'POST',
         body: formData,
+        signal: controller.signal
       });
 
+      clearTimeout(timeoutId);
       clearInterval(interval);
       setProgress(100);
+
+      if (!response.ok) {
+        throw new Error(`Error HTTP: ${response.status}`);
+      }
 
       const data = await response.json();
       setResult(data);
       setStatus('result');
-    } catch {
+    } catch (err: any) {
       clearInterval(interval);
+      console.error("Fetch Error:", err);
+      
+      const isTimeout = err.name === 'AbortError';
       setResult({
         approved: false,
         placa: null,
-        message: 'Error de conexión. Intenta nuevamente.',
-        error: 'network_error',
+        message: isTimeout 
+          ? 'Los servidores de IA están saturados (Tiempo excedido). Intenta de nuevo.' 
+          : 'Error de conexión con el servidor. Revisa tu internet.',
+        error: isTimeout ? 'timeout' : 'network_error',
       });
       setStatus('result');
     }

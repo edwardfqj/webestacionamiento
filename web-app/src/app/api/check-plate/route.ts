@@ -45,37 +45,24 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-    // Reducido a 2 modelos para evitar que Vercel aborte por límite de tiempo de 10 segundos
-    const modelNames = ['gemini-flash-latest', 'gemini-2.5-flash'];
+    // Usar directamente un solo modelo ultra-rápido para asegurar que termine antes del límite de Vercel
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash' });
+    const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
     
+    const imagePart = {
+      inlineData: {
+        data: base64Image,
+        mimeType: 'image/jpeg',
+      },
+    };
+
     let text = '';
-    let success = false;
-    let lastError = null;
-
-    for (const modelName of modelNames) {
-      try {
-        const model = genAI.getGenerativeModel({ model: modelName });
-        const prompt = "You are an ALPR (Automatic License Plate Recognition) system. Analyze this image and extract ONLY the alphanumeric text of the license plate of the vehicle. Do not include spaces, hyphens, or any other punctuation. If you cannot clearly see a license plate, return strictly 'NULL'. Provide absolutely no other explanation or text.";
-        
-        const imagePart = {
-          inlineData: {
-            data: base64Image,
-            mimeType: 'image/jpeg',
-          },
-        };
-
-        const result = await model.generateContent([prompt, imagePart]);
-        text = result.response.text().trim();
-        success = true;
-        break; // Salir si tuvimos éxito
-      } catch (e: any) {
-        console.warn(`Gemini (${modelName}) falló:`, e.message);
-        lastError = e;
-      }
-    }
-
-    if (!success) {
-      throw lastError || new Error("Todos los modelos de IA fallaron.");
+    try {
+      const result = await model.generateContent([prompt, imagePart]);
+      text = result.response.text().trim();
+    } catch (e: any) {
+      console.error('Error de Gemini:', e.message);
+      throw new Error(`Fallo en IA: ${e.message}`);
     }
 
     if (text === 'NULL' || text === '') {

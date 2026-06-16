@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/gate-status — reset: el ESP32 avisa que cerró la barrera
+// POST /api/gate-status — reset: el ESP32 avisa si abrió (pulsador) o cerró la barrera
 export async function POST(request: NextRequest) {
   try {
     const apiKey = request.headers.get('x-api-key');
@@ -44,16 +44,28 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
     }
 
+    const body = await request.json().catch(() => ({}));
+    const newStatus = body.status === 'open' ? 'open' : 'closed';
+    const method = body.method || 'desconocido';
+
     const sql = getSQL();
     await sql`
       UPDATE gate_status
-      SET status = 'closed', updated_at = NOW()
+      SET status = ${newStatus}, updated_at = NOW()
       WHERE id = 1
     `;
 
-    return NextResponse.json({ message: 'Barrera cerrada correctamente' });
+    // Si fue abierto por pulsador manual, registramos el evento en accesos
+    if (newStatus === 'open' && method === 'pulsador') {
+      await sql`
+        INSERT INTO accesos (placa, nombre, resultado, metodo)
+        VALUES ('MANUAL', 'Apertura por Botón', 'permitido', 'pulsador')
+      `;
+    }
+
+    return NextResponse.json({ message: `Barrera actualizada a ${newStatus}` });
   } catch (error) {
-    console.error('Error resetting gate:', error);
-    return NextResponse.json({ error: 'Error al resetear barrera' }, { status: 500 });
+    console.error('Error updating gate:', error);
+    return NextResponse.json({ error: 'Error al actualizar barrera' }, { status: 500 });
   }
 }

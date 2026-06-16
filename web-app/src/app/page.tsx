@@ -68,7 +68,7 @@ export default function HomePage() {
 
   const fetchGateStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/gate-status', { cache: 'no-store' });
+      const res = await fetch(`/api/gate-status?t=${Date.now()}`, { cache: 'no-store' });
       const data = await res.json();
       setGateOpen(data.open);
     } catch {}

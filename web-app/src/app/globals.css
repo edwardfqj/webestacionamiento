@@ -19,7 +19,7 @@
   --border-light: #253553;
 
   /* Acentos */
-  --accent-cyan: #ccff00; /* Cambiado a VERDE LIMA para confirmar despliegue */
+  --accent-cyan: #ff00ff; /* Cambiado a MAGENTA para confirmar despliegue */
   --accent-green: #00ff88;
   --accent-blue: #4f8ef7;
   --accent-red: #ff4757;
@@ -32,7 +32,7 @@
   --text-muted: #4a5d7a;
 
   /* Gradientes */
-  --gradient-primary: linear-gradient(135deg, #ccff00, #99cc00); /* Cambiado a Verde Lima */
+  --gradient-primary: linear-gradient(135deg, #ff00ff, #cc00cc); /* Cambiado a Magenta */
   --gradient-card: linear-gradient(145deg, #141d35, #0f1629);
   --gradient-danger: linear-gradient(135deg, #ff4757, #c0392b);
   --gradient-success: linear-gradient(135deg, #00ff88, #00b894);
@@ -41,7 +41,7 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
-  --shadow-cyan: 0 0 20px rgba(204, 255, 0, 0.3); /* Sombra Verde Lima */
+  --shadow-cyan: 0 0 20px rgba(255, 0, 255, 0.3); /* Sombra Magenta */
   --shadow-green: 0 0 20px rgba(0, 255, 136, 0.15);
 
   /* Radios */

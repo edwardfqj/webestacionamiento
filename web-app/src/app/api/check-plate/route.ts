@@ -45,8 +45,8 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await imageFile.arrayBuffer();
     const base64Image = Buffer.from(arrayBuffer).toString('base64');
 
-    // Modelos ultra-rápidos de tu cuenta en orden de prioridad
-    const modelNames = ['gemini-flash-latest', 'gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro'];
+    // Reducido a 2 modelos para evitar que Vercel aborte por límite de tiempo de 10 segundos
+    const modelNames = ['gemini-flash-latest', 'gemini-2.5-flash'];
     
     let text = '';
     let success = false;

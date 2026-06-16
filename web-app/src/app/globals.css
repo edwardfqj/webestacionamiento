@@ -19,7 +19,7 @@
   --border-light: #253553;
 
   /* Acentos */
-  --accent-cyan: #00ff22; /* Cambiado a VERDE NEÓN para confirmar despliegue */
+  --accent-cyan: #ff9900; /* Cambiado a NARANJA NEÓN para confirmar despliegue */
   --accent-green: #00ff88;
   --accent-blue: #4f8ef7;
   --accent-red: #ff4757;
@@ -32,7 +32,7 @@
   --text-muted: #4a5d7a;
 
   /* Gradientes */
-  --gradient-primary: linear-gradient(135deg, #00ff22, #00a811); /* Cambiado a Verde */
+  --gradient-primary: linear-gradient(135deg, #ff9900, #e67e22); /* Cambiado a Naranja */
   --gradient-card: linear-gradient(145deg, #141d35, #0f1629);
   --gradient-danger: linear-gradient(135deg, #ff4757, #c0392b);
   --gradient-success: linear-gradient(135deg, #00ff88, #00b894);
@@ -41,7 +41,7 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 20px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.5);
-  --shadow-cyan: 0 0 20px rgba(0, 255, 34, 0.3); /* Sombra verde neón */
+  --shadow-cyan: 0 0 20px rgba(255, 153, 0, 0.3); /* Sombra naranja neón */
   --shadow-green: 0 0 20px rgba(0, 255, 136, 0.15);
 
   /* Radios */
@@ -526,7 +526,7 @@ td {
   font-family: 'Courier New', monospace;
   font-size: 0.9rem;
   font-weight: 700;
-  color: var(--accent-cyan);
+  color: #ff9900;
   letter-spacing: 0.1em;
 }
 

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSQL } from '@/lib/db';
 
+export const dynamic = 'force-dynamic';
+
 // GET /api/gate-status — el ESP32 consulta este endpoint para saber si debe abrir
 export async function GET(request: NextRequest) {
   try {

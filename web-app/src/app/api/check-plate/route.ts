@@ -64,10 +64,11 @@ export async function POST(request: NextRequest) {
     // Normalizar a formato mayúscula sin guiones
     const detectedPlate = extractPlate(rawPlateText);
 
-    if (!detectedPlate || detectedPlate.length < 6 || bestMatch.score < 0.5) {
+    // Relajamos la longitud a 4 pero exigimos 95% de seguridad
+    if (!detectedPlate || detectedPlate.length < 4 || bestMatch.score < 0.95) {
       return NextResponse.json({
         approved: false,
-        error: 'Placa leída muy corta o baja confianza',
+        error: 'Confianza menor al 95%',
         raw_text: rawPlateText,
         placa: null,
       }, { status: 200 });

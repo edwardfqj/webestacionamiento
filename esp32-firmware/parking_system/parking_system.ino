@@ -2,62 +2,63 @@
  * ============================================================
  * SISTEMA DE ESTACIONAMIENTO AUTOMÁTICO
  * Firmware para ESP32
- * 
+ *
  * Componentes:
  *   - Servomotor (barrera)      → GPIO 18
  *   - HC-SR04 TRIG              → GPIO 5
  *   - HC-SR04 ECHO              → GPIO 4
  *   - Pulsador de override      → GPIO 15 (con pull-up interno)
  *   - LED indicador (opcional)  → GPIO 2 (LED interno ESP32)
- * 
+ *
  * Librerías requeridas (instalar en Arduino IDE):
  *   - ESP32Servo   (búscala en Library Manager)
  *   - HTTPClient   (incluida con ESP32)
  *   - ArduinoJson  (v7.x, buscar en Library Manager)
- * 
+ *
  * ============================================================
  */
 
-#include <WiFi.h>
-#include <HTTPClient.h>
-#include <WiFiClientSecure.h>
 #include <ArduinoJson.h>
 #include <ESP32Servo.h>
+#include <HTTPClient.h>
+#include <WiFi.h>
+#include <WiFiClientSecure.h>
 
 // ============================================================
 // CONFIGURACIÓN - EDITAR ESTOS VALORES
 // ============================================================
-const char* WIFI_SSID     = "CELERITY_SCRUBY";           // Nombre de tu red WiFi
-const char* WIFI_PASSWORD = "0502395338";    // Contraseña de tu red WiFi
+const char *WIFI_SSID = "faby";         // Nombre de tu red WiFi
+const char *WIFI_PASSWORD = "12345678"; // Contraseña de tu red WiFi
 
-// URL de tu app en Vercel (sin / al final)
-const char* SERVER_URL    = "https://webestacionamiento-six.vercel.app/";
+// URL de tu servidor en Vercel (Internet)
+const char *SERVER_URL = "https://webestacionamiento.vercel.app";
 
-// API Key (debe coincidir con ESP32_API_KEY en las variables de entorno de Vercel)
-const char* API_KEY       = "clinica2026";
+// API Key (debe coincidir con ESP32_API_KEY en las variables de entorno de
+// Vercel)
+const char *API_KEY = "clinica2026";
 
 // ============================================================
 // PINES
 // ============================================================
-#define PIN_SERVO         18    // Señal PWM del servomotor
-#define PIN_ULTRASONIC_TRIG  5  // Trigger del HC-SR04
-#define PIN_ULTRASONIC_ECHO  4  // Echo del HC-SR04
-#define PIN_BUTTON        15    // Pulsador de override manual
-#define PIN_LED           2     // LED indicador (LED interno ESP32)
+#define PIN_SERVO 18          // Señal PWM del servomotor
+#define PIN_ULTRASONIC_TRIG 5 // Trigger del HC-SR04
+#define PIN_ULTRASONIC_ECHO 4 // Echo del HC-SR04
+#define PIN_BUTTON 15         // Pulsador de override manual
+#define PIN_LED 2             // LED indicador (LED interno ESP32)
 
 // ============================================================
 // PARÁMETROS DEL SISTEMA
 // ============================================================
-// CONFIGURACIÓN PARA SERVO 360 GRADOS (Rotación Continua)
-#define SERVO_STOP_SPEED    90    // Velocidad 90 = PARAR el servo
-#define SERVO_OPEN_SPEED    180   // Velocidad 180 = Girar hacia adelante (abrir)
-#define SERVO_CLOSE_SPEED   0     // Velocidad 0 = Girar hacia atrás (cerrar)
-#define SERVO_MOVE_TIME     500   // Tiempo en milisegundos para girar aprox 90° (AJUSTAR ESTO a prueba y error)
+// CONFIGURACIÓN PARA SERVO (180 Grados Estándar)
+#define SERVO_OPEN_ANGLE 90  // Ángulo exacto para barrera abierta
+#define SERVO_CLOSE_ANGLE 10 // Ángulo exacto para barrera cerrada
 
-#define GATE_OPEN_TIME      10000 // Tiempo que permanece abierta la barrera (ms) = 10 segundos
-#define OBSTACLE_DISTANCE   30    // Distancia en cm para considerar que hay un auto (< 30cm = hay auto)
-#define POLL_INTERVAL       1000  // Intervalo de polling a la API (ms)
-#define ULTRASONIC_SAMPLES  3     // Número de mediciones para promediar
+#define GATE_OPEN_TIME                                                         \
+  5000 // Tiempo que permanece abierta la barrera (ms) = 10 segundos
+#define OBSTACLE_DISTANCE                                                      \
+  10 // Distancia en cm para considerar que hay un auto (0 a 10cm = hay auto)
+#define POLL_INTERVAL 1000   // Intervalo de polling a la API (ms)
+#define ULTRASONIC_SAMPLES 3 // Número de mediciones para promediar
 
 // ============================================================
 // VARIABLES GLOBALES
@@ -80,15 +81,15 @@ void setup() {
   // Configurar pines
   pinMode(PIN_ULTRASONIC_TRIG, OUTPUT);
   pinMode(PIN_ULTRASONIC_ECHO, INPUT);
-  pinMode(PIN_BUTTON, INPUT_PULLUP);  // Pull-up interno: LOW cuando se presiona
+  pinMode(PIN_BUTTON, INPUT_PULLUP); // Pull-up interno: LOW cuando se presiona
   pinMode(PIN_LED, OUTPUT);
 
   // Conectar WiFi PRIMERO antes de intentar enviar peticiones HTTP
   connectWiFi();
 
   // Inicializar servo
-  barrierServo.attach(PIN_SERVO, 500, 2400);  // 500µs - 2400µs (ajustar si es necesario)
-  closeGate();  // Asegurarse que la barrera esté cerrada al inicio
+  barrierServo.attach(PIN_SERVO, 500, 2400);
+  closeGate(); // Asegurarse que la barrera esté cerrada al inicio
 
   // Parpadeo inicial del LED
   for (int i = 0; i < 3; i++) {
@@ -118,7 +119,7 @@ void loop() {
     if (!gateIsOpen) {
       openGate("pulsador");
     }
-    delay(50);  // Debounce
+    delay(50); // Debounce
   }
   buttonLastState = buttonState;
 
@@ -155,7 +156,7 @@ void connectWiFi() {
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n[WIFI] ✓ Conectado!");
     Serial.printf("[WIFI] IP: %s\n", WiFi.localIP().toString().c_str());
-    digitalWrite(PIN_LED, HIGH);  // LED encendido = conectado
+    digitalWrite(PIN_LED, HIGH); // LED encendido = conectado
   } else {
     Serial.println("\n[WIFI] ✗ Error al conectar. Reiniciando en 5s...");
     delay(5000);
@@ -173,17 +174,16 @@ void pollGateStatus() {
   }
   String url = serverStr + "/api/gate-status";
 
-  WiFiClientSecure *client = new WiFiClientSecure;
-  if (client) {
-    client->setInsecure(); // Evitar problemas con certificados SSL en Vercel
-    HTTPClient http;
-    
-    http.begin(*client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("x-api-key", API_KEY);
-    http.setTimeout(5000);
-    
-    int httpCode = http.GET();
+  WiFiClientSecure client;
+  client.setInsecure(); // Permitir HTTPS sin certificado fijo
+  HTTPClient http;
+
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.begin(client, url);
+  http.addHeader("x-api-key", API_KEY);
+  http.setTimeout(8000);
+
+  int httpCode = http.GET();
 
   if (httpCode == HTTP_CODE_OK) {
     String payload = http.getString();
@@ -194,7 +194,7 @@ void pollGateStatus() {
 
     if (!error) {
       bool shouldOpen = doc["open"].as<bool>();
-      const char* placa = doc["placa"] | "";
+      const char *placa = doc["placa"] | "";
 
       if (shouldOpen) {
         Serial.printf("[API] Barrera debe abrirse — Placa: %s\n", placa);
@@ -207,13 +207,11 @@ void pollGateStatus() {
     }
   } else if (httpCode == 401) {
     Serial.println("[API] Error 401: API Key incorrecta");
-    } else {
-      Serial.printf("[API] Error HTTP GET: %d\n", httpCode);
-    }
-
-    http.end();
-    delete client;
+  } else {
+    Serial.printf("[API] Error HTTP GET: %d\n", httpCode);
   }
+
+  http.end();
 }
 
 // ============================================================
@@ -222,11 +220,10 @@ void pollGateStatus() {
 void openGate(String method) {
   Serial.println("[GATE] 🔓 Abriendo barrera...");
 
-  // Servo 360: Reactivar señal, girar, y cortar señal (detach) para freno total
+  // Servo 180: Ir al ángulo exacto
   barrierServo.attach(PIN_SERVO, 500, 2400);
-  barrierServo.write(SERVO_OPEN_SPEED);
-  delay(SERVO_MOVE_TIME);
-  barrierServo.detach(); // Esto asegura que el MG90S se detenga sí o sí
+  barrierServo.write(SERVO_OPEN_ANGLE);
+  delay(500); // Darle medio segundo para llegar a la posición
 
   gateIsOpen = true;
   gateOpenedAt = millis();
@@ -235,7 +232,8 @@ void openGate(String method) {
   notifyGateStatus("open", method);
 
   // Encender LED con parpadeo
-  Serial.printf("[GATE] Barrera abierta por %d segundos\n", GATE_OPEN_TIME / 1000);
+  Serial.printf("[GATE] Barrera abierta por %d segundos\n",
+                GATE_OPEN_TIME / 1000);
 }
 
 // ============================================================
@@ -243,19 +241,18 @@ void openGate(String method) {
 // ============================================================
 void closeGate() {
   Serial.println("[GATE] 🔒 Cerrando barrera...");
-  
-  // Servo 360: Reactivar señal, girar atrás, y cortar señal
+
+  // Servo 180: Ir al ángulo exacto
   barrierServo.attach(PIN_SERVO, 500, 2400);
-  barrierServo.write(SERVO_CLOSE_SPEED);
-  delay(SERVO_MOVE_TIME);
-  barrierServo.detach();
+  barrierServo.write(SERVO_CLOSE_ANGLE);
+  delay(500); // Darle medio segundo para llegar a la posición
 
   gateIsOpen = false;
 
   // Notificar al servidor que la barrera fue cerrada
   notifyGateStatus("closed", "sensor");
 
-  digitalWrite(PIN_LED, HIGH);  // LED fijo = normal
+  digitalWrite(PIN_LED, HIGH); // LED fijo = normal
   Serial.println("[GATE] Barrera cerrada correctamente");
 }
 
@@ -279,9 +276,11 @@ void manageOpenGate() {
     float distance = measureDistance();
     Serial.printf("[SENSOR] Distancia medida: %.1f cm\n", distance);
 
-    if (distance < OBSTACLE_DISTANCE && distance > 0) {
+    if (distance <= OBSTACLE_DISTANCE && distance > 0) {
       // HAY AUTO EN LA MITAD — NO CERRAR
-      Serial.printf("[SENSOR] ⚠️  Auto detectado a %.1f cm — Manteniendo barrera abierta\n", distance);
+      Serial.printf("[SENSOR] ⚠️  Auto detectado a %.1f cm — Manteniendo "
+                    "barrera abierta\n",
+                    distance);
       // Reiniciar temporizador para volver a verificar en 2 segundos
       gateOpenedAt = millis() - (GATE_OPEN_TIME - 2000);
     } else {
@@ -309,20 +308,21 @@ float measureDistance() {
     digitalWrite(PIN_ULTRASONIC_TRIG, LOW);
 
     // Medir duración del echo
-    long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000);  // Timeout 30ms
+    long duration = pulseIn(PIN_ULTRASONIC_ECHO, HIGH, 30000); // Timeout 30ms
 
     if (duration > 0) {
-      float distance = (duration * 0.0343) / 2;  // cm
-      if (distance > 0 && distance < 400) {       // Rango válido: 0-400 cm
+      float distance = (duration * 0.0343) / 2; // cm
+      if (distance > 0 && distance < 400) {     // Rango válido: 0-400 cm
         totalDistance += distance;
         validReadings++;
       }
     }
 
-    delay(50);  // Pequeña pausa entre mediciones
+    delay(50); // Pequeña pausa entre mediciones
   }
 
-  if (validReadings == 0) return -1.0;  // Error de lectura
+  if (validReadings == 0)
+    return -1.0; // Error de lectura
   return totalDistance / validReadings;
 }
 
@@ -341,28 +341,26 @@ void notifyGateStatus(String status, String method) {
   }
   String url = serverStr + "/api/gate-status";
 
-  WiFiClientSecure *client = new WiFiClientSecure;
-  if (client) {
-    client->setInsecure();
-    HTTPClient http;
+  WiFiClientSecure client;
+  client.setInsecure(); // Permitir HTTPS sin certificado fijo
+  HTTPClient http;
 
-    http.begin(*client, url);
-    http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("x-api-key", API_KEY);
-    http.setTimeout(5000);
+  http.setFollowRedirects(HTTPC_STRICT_FOLLOW_REDIRECTS);
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  http.addHeader("x-api-key", API_KEY);
+  http.setTimeout(8000);
 
-    // Crear JSON a mano para máxima eficiencia y evitar alloc dynamic array
-    String payload = "{\"status\":\"" + status + "\",\"method\":\"" + method + "\"}";
-    int httpCode = http.POST(payload);
+  // Crear JSON a mano para máxima eficiencia
+  String payload =
+      "{\"status\":\"" + status + "\",\"method\":\"" + method + "\"}";
+  int httpCode = http.POST(payload);
 
   if (httpCode == HTTP_CODE_OK) {
     Serial.printf("[API] ✓ Servidor notificado: barrera %s\n", status.c_str());
   } else {
-      Serial.printf("[API] Error notificando estado HTTP POST: %d\n", httpCode);
-    }
-
-    http.end();
-    delete client;
+    Serial.printf("[API] Error notificando estado HTTP POST: %d\n", httpCode);
   }
+
+  http.end();
 }

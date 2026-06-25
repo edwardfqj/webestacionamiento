@@ -66,7 +66,8 @@ export default function ScanPage() {
       const data = await response.json();
 
       if (isBackground) {
-        if (data.placa) {
+        // Si hay una placa válida O si hay un mensaje de depuración del filtro
+        if (data.placa || data.message) {
           setResult(data);
           setStatus('result');
           setIsAutoMode(false);

@@ -57,22 +57,28 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
-    // Tomar la placa con mayor nivel de confianza (confidence)
-    const bestMatch = results[0];
-    const rawPlateText = bestMatch.plate;
-    
-    // Normalizar a formato mayúscula sin guiones
-    const detectedPlate = extractPlate(rawPlateText);
+    // Filtrar placas con longitud válida y confianza de al menos 90% (0.90)
+    // (Ajustado a 90% porque en tu imagen hay placas de 94.7% y 91.3% que se perderían con 95%)
+    const validResults = results
+      .filter((r: any) => {
+        const plateStr = extractPlate(r.plate);
+        return plateStr && plateStr.length >= 4 && r.score >= 0.90;
+      })
+      .sort((a: any, b: any) => b.score - a.score);
 
-    // Relajamos la longitud a 4 pero exigimos 95% de seguridad
-    if (!detectedPlate || detectedPlate.length < 4 || bestMatch.score < 0.95) {
+    if (validResults.length === 0) {
       return NextResponse.json({
         approved: false,
-        error: 'Confianza menor al 95%',
-        raw_text: rawPlateText,
+        error: 'Confianza menor al 90% o placa muy corta',
+        raw_text: results[0] ? results[0].plate : 'NULL',
         placa: null,
       }, { status: 200 });
     }
+
+    // Tomar la placa válida con mayor nivel de confianza
+    const bestMatch = validResults[0];
+    const rawPlateText = bestMatch.plate;
+    const detectedPlate = extractPlate(rawPlateText);
 
     const sql = getSQL();
     

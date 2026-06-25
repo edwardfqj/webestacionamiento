@@ -62,7 +62,14 @@ export default function ScanPage() {
       formData.append('image', blob, 'plate.jpg');
 
       const response = await fetch('/api/check-plate', { method: 'POST', body: formData });
-      if (!response.ok) throw new Error('Network response was not ok');
+      if (!response.ok) {
+        let errStr = 'Error desconocido del servidor';
+        try {
+          const errData = await response.json();
+          errStr = errData.error || errStr;
+        } catch(e) {}
+        throw new Error(errStr);
+      }
       const data = await response.json();
 
       if (isBackground) {
@@ -77,11 +84,12 @@ export default function ScanPage() {
         setResult(data);
         setStatus('result');
       }
-    } catch {
-      if (!isBackground) {
-        setResult({ approved: false, placa: null, message: 'Connection Error' });
-        setStatus('result');
-      }
+    } catch (err: any) {
+      // Mostrar el error en pantalla siempre, para poder depurar qué está fallando (Vercel o Limits)
+      setResult({ approved: false, placa: null, message: err?.message || 'Error Interno del Servidor (500)' });
+      setStatus('result');
+      setIsAutoMode(false);
+      setTimeout(reset, 8000);
     } finally {
       isScanningRef.current = false;
       setIsScanningBg(false);

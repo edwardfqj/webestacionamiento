@@ -12,27 +12,27 @@
    }
    
    :root {
-     /* Escala Monocromática */
-     --bg-base: #000000;
-     --bg-elevated: #0a0a0a;
-     --bg-surface: #111111;
-     --bg-hover: #1a1a1a;
-     
-     --border-subtle: #1f1f1f;
-     --border-strong: #333333;
-     
-     --text-primary: #ffffff;
-     --text-secondary: #a1a1aa;
-     --text-muted: #71717a;
-   
-     /* Acentos B&W */
-     --accent-primary: #ffffff;
-     --accent-primary-hover: #e4e4e7;
-     --accent-invert: #000000;
-     
-     /* Semantic Colors (muy sutiles para no romper el B&W) */
-     --color-success: #10b981;
-     --color-error: #ef4444;
+    /* Escala Claro (Blanco dominante) */
+    --bg-base: #ffffff;
+    --bg-elevated: #f8fafc;
+    --bg-surface: #f1f5f9;
+    --bg-hover: #e2e8f0;
+    
+    --border-subtle: #e2e8f0;
+    --border-strong: #cbd5e1;
+    
+    --text-primary: #0f172a;
+    --text-secondary: #475569;
+    --text-muted: #94a3b8;
+
+    /* Acentos (Azul y Rojo) */
+    --accent-primary: #1d4ed8;       
+    --accent-primary-hover: #1e3a8a; 
+    --accent-invert: #ffffff;        
+    
+    /* Semantic Colors */
+    --color-success: #2563eb; /* Azul para acciones positivas */
+    --color-error: #dc2626;   /* Rojo para acciones negativas */
    
      /* Sombra y Radio */
      --radius-sm: 6px;
@@ -71,10 +71,10 @@
      justify-content: space-between;
      padding: 0 5%;
      height: 72px;
-     background: rgba(0, 0, 0, 0.8);
-     backdrop-filter: blur(12px);
-     -webkit-backdrop-filter: blur(12px);
-     border-bottom: 1px solid var(--border-subtle);
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid var(--border-subtle);
    }
    
    .navbar-brand {
@@ -85,17 +85,17 @@
    }
    
    .navbar-logo {
-     width: 28px;
-     height: 28px;
-     background: var(--text-primary);
-     color: var(--bg-base);
-     border-radius: 4px;
-     display: flex;
-     align-items: center;
-     justify-content: center;
-     font-size: 14px;
-     font-weight: 800;
-   }
+    width: 28px;
+    height: 28px;
+    background: var(--accent-primary);
+    color: var(--accent-invert);
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+    font-weight: 800;
+  }
    
    .navbar-title {
      font-size: 1rem;
@@ -128,9 +128,9 @@
    }
    
    .nav-link.active {
-     color: var(--bg-base);
-     background: var(--text-primary);
-   }
+    color: var(--accent-invert);
+    background: var(--accent-primary);
+  }
    
    /* ====== CONTENEDOR PRINCIPAL ====== */
    .main-container {
@@ -309,13 +309,13 @@
    }
    
    .btn-primary {
-     background: var(--text-primary);
-     color: var(--bg-base);
-   }
-   
-   .btn-primary:hover:not(:disabled) {
-     background: var(--accent-primary-hover);
-   }
+    background: var(--accent-primary);
+    color: var(--accent-invert);
+  }
+  
+  .btn-primary:hover:not(:disabled) {
+    background: var(--accent-primary-hover);
+  }
    
    .btn-secondary {
      background: var(--bg-surface);
@@ -413,8 +413,8 @@
    }
    
    .toggle.active {
-     background: var(--text-primary);
-   }
+    background: var(--accent-primary);
+  }
    
    .toggle::after {
      content: '';

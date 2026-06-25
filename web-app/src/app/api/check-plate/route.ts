@@ -57,19 +57,21 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
-    // Filtrar placas con longitud válida y confianza de al menos 90% (0.90)
-    // (Ajustado a 90% porque en tu imagen hay placas de 94.7% y 91.3% que se perderían con 95%)
+    // Filtrar placas con longitud válida y confianza de al menos 85% (0.85)
+    // (Ajustado a 85% para mayor tolerancia)
     const validResults = results
       .filter((r: any) => {
         const plateStr = extractPlate(r.plate);
-        return plateStr && plateStr.length >= 4 && r.score >= 0.90;
+        return plateStr && plateStr.length >= 4 && r.score >= 0.85;
       })
       .sort((a: any, b: any) => b.score - a.score);
 
     if (validResults.length === 0) {
+      const debugScores = results.map((r:any) => `${r.plate}: ${(r.score*100).toFixed(1)}%`).join(' | ');
       return NextResponse.json({
         approved: false,
-        error: 'Confianza menor al 90% o placa muy corta',
+        error: 'Confianza menor al 85% o placa muy corta',
+        message: `Filtro Activo. Detectado: ${debugScores}`,
         raw_text: results[0] ? results[0].plate : 'NULL',
         placa: null,
       }, { status: 200 });

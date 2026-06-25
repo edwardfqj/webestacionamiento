@@ -20,11 +20,19 @@ export async function PATCH(
 
     // Actualizar solo los campos enviados
     if (pagado !== undefined) {
-      await sql`
-        UPDATE clientes
-        SET pagado = ${pagado}, updated_at = NOW()
-        WHERE id = ${id}
-      `;
+      if (pagado === true) {
+        await sql`
+          UPDATE clientes
+          SET pagado = true, hora_entrada = NULL, updated_at = NOW()
+          WHERE id = ${id}
+        `;
+      } else {
+        await sql`
+          UPDATE clientes
+          SET pagado = false, updated_at = NOW()
+          WHERE id = ${id}
+        `;
+      }
     }
 
     if (nombre || cedula || placa) {

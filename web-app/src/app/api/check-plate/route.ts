@@ -73,15 +73,38 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
+    // Asegurarse de que la columna hora_entrada exista
+    try {
+      await sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS hora_entrada TIMESTAMP;`;
+    } catch(e) {}
+
     // Buscar en base de datos
-    const sql = getSQL();
     const rows = await sql`
-      SELECT id, cedula, nombre, placa, pagado
+      SELECT id, cedula, nombre, placa, pagado, hora_entrada
       FROM clientes
       WHERE placa = ${detectedPlate}
     `;
 
-    const cliente = rows[0] as { id: number; cedula: string; nombre: string; placa: string; pagado: boolean } | undefined;
+    let cliente = rows[0] as { id: number; cedula: string; nombre: string; placa: string; pagado: boolean; hora_entrada: Date | null } | undefined;
+    let autoRegistrado = false;
+
+    // Si NO existe, lo auto-registramos como Visitante
+    if (!cliente) {
+      const tempCedula = 'VISITANTE-' + detectedPlate;
+      const res = await sql`
+        INSERT INTO clientes (cedula, nombre, placa, pagado, hora_entrada)
+        VALUES (${tempCedula}, 'Visitante', ${detectedPlate}, false, NOW())
+        RETURNING id, cedula, nombre, placa, pagado, hora_entrada
+      `;
+      cliente = res[0] as typeof cliente;
+      autoRegistrado = true;
+    } else {
+      // Si existe y no tiene hora de entrada, se la seteamos (acaba de entrar)
+      if (!cliente.hora_entrada && !cliente.pagado) {
+        await sql`UPDATE clientes SET hora_entrada = NOW() WHERE id = ${cliente.id}`;
+      }
+    }
+
     const approved = cliente?.pagado === true;
     const resultado = approved ? 'permitido' : 'denegado';
 
@@ -106,17 +129,21 @@ export async function POST(request: NextRequest) {
       `;
     }
 
+    // Determinar mensaje a mostrar y hablar (TTS)
+    let finalMessage = '';
+    if (approved) {
+      finalMessage = `Bienvenido ${cliente!.nombre}`;
+    } else {
+      finalMessage = `Recuerde acercarse a pagar al punto de pago antes de salir`;
+    }
+
     return NextResponse.json({
       approved,
       placa: detectedPlate,
       raw_text: rawPlateText, // Placa original devuelta por la API
       confidence: bestMatch.score, // Por si lo quisieras mostrar
-      cliente: approved && cliente ? { nombre: cliente.nombre, cedula: cliente.cedula } : null,
-      message: approved && cliente
-        ? `✅ Acceso permitido — ${cliente.nombre}`
-        : cliente
-          ? '❌ Vehículo no ha pagado'
-          : '❌ Placa no registrada en el sistema',
+      cliente: cliente ? { nombre: cliente.nombre, cedula: cliente.cedula } : null,
+      message: finalMessage,
     });
 
   } catch (error: any) {

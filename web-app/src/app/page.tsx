@@ -10,6 +10,7 @@ type Cliente = {
   placa: string;
   pagado: boolean;
   created_at: string;
+  hora_entrada: string | null;
 };
 
 type Acceso = {
@@ -76,6 +77,18 @@ export default function HomePage() {
   const accessosHoy = accesos.filter(a => new Date(a.created_at).toDateString() === new Date().toDateString()).length;
 
   const handleTogglePagado = async (client: Cliente) => {
+    if (!client.pagado && client.hora_entrada) {
+      const entryTime = new Date(client.hora_entrada);
+      const now = new Date();
+      const diffMs = now.getTime() - entryTime.getTime();
+      const diffHours = diffMs / (1000 * 60 * 60);
+      const hoursToCharge = Math.max(1, Math.ceil(diffHours));
+      const amount = hoursToCharge * 1; // $1 por fracción
+      
+      const confirmPayment = confirm(`🚗 COBRO POR PARQUEO 🚗\n\nVehículo: ${client.placa}\nTiempo transcurrido: ${diffHours.toFixed(2)} horas\n\nTotal a cobrar: $${amount}.00\n\n¿Confirmar recepción del pago y habilitar salida?`);
+      if (!confirmPayment) return;
+    }
+
     try {
       const res = await fetch(`/api/clients/${client.id}`, {
         method: 'PATCH',
@@ -83,7 +96,8 @@ export default function HomePage() {
         body: JSON.stringify({ pagado: !client.pagado }),
       });
       if (!res.ok) throw new Error();
-      setClients(prev => prev.map(c => c.id === client.id ? { ...c, pagado: !c.pagado } : c));
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, pagado: !c.pagado, hora_entrada: !c.pagado ? null : c.hora_entrada } : c));
+      if (!client.pagado) showToast('success', 'Pago registrado exitosamente.');
     } catch {
       showToast('error', 'No se pudo actualizar el estado');
     }
@@ -221,7 +235,7 @@ export default function HomePage() {
                       <th>Propietario</th>
                       <th>Placa</th>
                       <th>Status de Pago</th>
-                      <th>Registro</th>
+                      <th>Hora de Entrada</th>
                       <th style={{ textAlign: 'right' }}>Acciones</th>
                     </tr>
                   </thead>
@@ -237,7 +251,9 @@ export default function HomePage() {
                             {client.pagado ? <span className="badge badge-success">Saldado</span> : <span className="badge badge-neutral">Pendiente</span>}
                           </div>
                         </td>
-                        <td style={{ color: 'var(--text-muted)' }}>{formatDate(client.created_at)}</td>
+                        <td style={{ color: 'var(--text-muted)' }}>
+                          {client.hora_entrada ? formatDate(client.hora_entrada) : <span style={{ opacity: 0.5 }}>--</span>}
+                        </td>
                         <td style={{ textAlign: 'right' }}>
                           <button className="btn btn-icon" onClick={() => openEditModal(client)}>Edit</button>
                           <button className="btn btn-icon btn-danger" onClick={() => handleDelete(client)}>Del</button>

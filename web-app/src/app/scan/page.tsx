@@ -70,11 +70,26 @@ export default function ScanPage() {
           setResult(data);
           setStatus('result');
           setIsAutoMode(false);
-          if (data.approved) setTimeout(reset, 8000);
+          
+          // Hablar el mensaje
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(data.message);
+            utterance.lang = 'es-ES';
+            window.speechSynthesis.speak(utterance);
+          }
+          
+          setTimeout(reset, 8000); // Auto reset para todos los carros
         }
       } else {
         setResult(data);
         setStatus('result');
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+          const utterance = new SpeechSynthesisUtterance(data.message);
+          utterance.lang = 'es-ES';
+          window.speechSynthesis.speak(utterance);
+        }
       }
     } catch {
       if (!isBackground) {
@@ -166,10 +181,12 @@ export default function ScanPage() {
               border: `1px solid ${result.approved ? 'var(--color-success)' : 'var(--color-error)'}` 
             }}>
               <h2 style={{ fontSize: '1.2rem', fontWeight: 600, color: result.approved ? 'var(--color-success)' : 'var(--color-error)' }}>
-                {result.approved ? 'ACCESO AUTORIZADO' : 'ACCESO DENEGADO'}
+                {result.approved ? 'ACCESO AUTORIZADO' : 'VISITANTE / PAGO PENDIENTE'}
               </h2>
               {result.placa && <div className="result-placa">{result.placa}</div>}
-              <p style={{ color: 'var(--text-secondary)', fontSize: '0.9rem' }}>{result.message}</p>
+              <p style={{ color: 'var(--text-primary)', fontSize: '1.1rem', marginTop: '1rem', fontWeight: 500 }}>
+                {result.message}
+              </p>
               
               {result.approved && result.cliente && (
                 <div style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '1px solid var(--border-subtle)', textAlign: 'left' }}>
@@ -181,10 +198,9 @@ export default function ScanPage() {
             </div>
 
             <div style={{ marginTop: '2rem' }}>
-              {result.approved ? (
-                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Restableciendo sistema automáticamente...</p>
-              ) : (
-                <button className="btn btn-secondary" style={{ width: '100%' }} onClick={reset}>Continuar Escaneo</button>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Restableciendo sistema automǭticamente...</p>
+              {!isAutoMode && (
+                <button className="btn btn-secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={reset}>Forzar Escaneo Continuo</button>
               )}
             </div>
           </div>

@@ -13,10 +13,10 @@
    
    :root {
     /* Escala Claro (Blanco dominante) */
-    --bg-base: #ffffff;
-    --bg-elevated: #f8fafc;
+    --bg-base: #e0f2fe; /* Celeste claro para prueba */
+    --bg-elevated: #bae6fd;
     --bg-surface: #f1f5f9;
-    --bg-hover: #e2e8f0;
+    --bg-hover: #7dd3fc;
     
     --border-subtle: #e2e8f0;
     --border-strong: #cbd5e1;

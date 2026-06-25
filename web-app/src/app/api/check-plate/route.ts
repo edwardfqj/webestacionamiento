@@ -154,6 +154,12 @@ export async function POST(request: NextRequest) {
       )
     `;
 
+    // Asegurar que las columnas existen antes de actualizar
+    try {
+      await sql`ALTER TABLE gate_status ADD COLUMN IF NOT EXISTS message VARCHAR(255);`;
+      await sql`ALTER TABLE gate_status ADD COLUMN IF NOT EXISTS message_type VARCHAR(20);`;
+    } catch(e) {}
+
     // Actualizar pantalla pública (y abrir barrera si corresponde)
     if (approved) {
       await sql`

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 type GateStatus = {
   open: boolean;
@@ -13,45 +13,56 @@ type GateStatus = {
 
 export default function DisplayPage() {
   const [gateData, setGateData] = useState<GateStatus | null>(null);
-  const [lastUpdate, setLastUpdate] = useState<string | null>(null);
-
-  const fetchStatus = useCallback(async () => {
-    try {
-      // Evitar agresivamente el caché del navegador
-      const res = await fetch(`/api/gate-status?t=${Date.now()}`, { cache: 'no-store' });
-      if (!res.ok) return;
-      const data: GateStatus = await res.json();
-      
-      // Si hay un nuevo mensaje basado en la fecha de actualización
-      if (data.updated_at && data.updated_at !== lastUpdate && data.message) {
-        setGateData(data);
-        setLastUpdate(data.updated_at);
-        
-        // Reproducir audio
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(data.message);
-          utterance.lang = 'es-ES';
-          utterance.rate = 0.9;
-          window.speechSynthesis.speak(utterance);
-        }
-
-        // Volver a standby después de 8 segundos
-        setTimeout(() => {
-          setGateData(null);
-        }, 8000);
-      }
-    } catch (e) {
-      console.error('Error fetching gate status', e);
-    }
-  }, [lastUpdate]);
+  const [debugLog, setDebugLog] = useState<string>('Iniciando...');
+  const lastUpdateRef = useRef<string | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    const timer = setInterval(fetchStatus, 2000);
-    return () => clearInterval(timer);
-  }, [fetchStatus]);
+    const fetchStatus = async () => {
+      try {
+        const res = await fetch(`/api/gate-status?t=${Date.now()}`, { cache: 'no-store' });
+        
+        if (!res.ok) {
+          setDebugLog(`Error HTTP ${res.status}: ${res.statusText}`);
+          return;
+        }
 
-  // Si no hay mensaje reciente, mostrar pantalla de espera
+        const data: GateStatus = await res.json();
+        setDebugLog(`OK | msg: "${data.message}" | type: ${data.message_type} | updated: ${data.updated_at} | last: ${lastUpdateRef.current}`);
+
+        // Si hay un nuevo mensaje
+        if (data.updated_at && data.updated_at !== lastUpdateRef.current && data.message) {
+          lastUpdateRef.current = data.updated_at;
+          setGateData(data);
+
+          // Reproducir audio
+          if ('speechSynthesis' in window) {
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(data.message);
+            utterance.lang = 'es-ES';
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+          }
+
+          // Limpiar timeout anterior si existe
+          if (timerRef.current) clearTimeout(timerRef.current);
+          // Volver a standby después de 10 segundos
+          timerRef.current = setTimeout(() => {
+            setGateData(null);
+          }, 10000);
+        }
+      } catch (e: any) {
+        setDebugLog(`CATCH: ${e?.message || e}`);
+      }
+    };
+
+    // Consultar inmediatamente y luego cada 2 segundos
+    fetchStatus();
+    const interval = setInterval(fetchStatus, 2000);
+    return () => clearInterval(interval);
+  }, []); // Sin dependencias - el interval nunca se recrea
+
+  // Pantalla de espera (standby)
   if (!gateData || !gateData.message) {
     return (
       <div style={{
@@ -72,6 +83,14 @@ export default function DisplayPage() {
         <p style={{ fontSize: '2rem', color: 'var(--text-secondary)' }}>
           Acerque su vehículo a la barrera para escanear su placa
         </p>
+        {/* Panel de depuración temporal */}
+        <div style={{ 
+          position: 'fixed', bottom: '1rem', left: '1rem', right: '1rem',
+          background: 'rgba(0,0,0,0.8)', color: '#0f0', fontFamily: 'monospace',
+          padding: '0.5rem 1rem', borderRadius: '8px', fontSize: '0.8rem', textAlign: 'left'
+        }}>
+          DEBUG: {debugLog}
+        </div>
       </div>
     );
   }
@@ -88,7 +107,7 @@ export default function DisplayPage() {
       alignItems: 'center',
       justifyContent: 'center',
       backgroundColor: isSuccess ? 'var(--color-success)' : 'var(--color-error)',
-      color: '#ffffff', // Siempre blanco sobre fondo rojo/azul
+      color: '#ffffff',
       textAlign: 'center',
       padding: '4rem',
       transition: 'background-color 0.5s ease'
@@ -97,7 +116,7 @@ export default function DisplayPage() {
         {gateData.placa || 'VEHÍCULO DETECTADO'}
       </h2>
       <h1 style={{ 
-        fontSize: '6rem', 
+        fontSize: '5rem', 
         fontWeight: 800, 
         marginTop: '2rem',
         lineHeight: 1.1,

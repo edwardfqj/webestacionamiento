@@ -17,7 +17,8 @@ export default function DisplayPage() {
 
   const fetchStatus = useCallback(async () => {
     try {
-      const res = await fetch('/api/gate-status');
+      // Evitar agresivamente el caché del navegador
+      const res = await fetch(`/api/gate-status?t=${Date.now()}`, { cache: 'no-store' });
       if (!res.ok) return;
       const data: GateStatus = await res.json();
       
@@ -31,9 +32,14 @@ export default function DisplayPage() {
           window.speechSynthesis.cancel();
           const utterance = new SpeechSynthesisUtterance(data.message);
           utterance.lang = 'es-ES';
-          utterance.rate = 0.9; // Hablar ligeramente más lento para claridad
+          utterance.rate = 0.9;
           window.speechSynthesis.speak(utterance);
         }
+
+        // Volver a standby después de 8 segundos
+        setTimeout(() => {
+          setGateData(null);
+        }, 8000);
       }
     } catch (e) {
       console.error('Error fetching gate status', e);

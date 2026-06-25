@@ -73,6 +73,8 @@ export async function POST(request: NextRequest) {
       }, { status: 200 });
     }
 
+    const sql = getSQL();
+    
     // Asegurarse de que la columna hora_entrada exista
     try {
       await sql`ALTER TABLE clientes ADD COLUMN IF NOT EXISTS hora_entrada TIMESTAMP;`;

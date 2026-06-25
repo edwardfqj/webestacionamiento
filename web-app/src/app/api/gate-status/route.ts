@@ -4,15 +4,8 @@ import { getSQL } from '@/lib/db';
 export const dynamic = 'force-dynamic';
 
 // GET /api/gate-status — el ESP32 consulta este endpoint para saber si debe abrir
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    // Verificar API key del ESP32 (seguridad básica)
-    const apiKey = request.headers.get('x-api-key');
-    const validKey = process.env.ESP32_API_KEY;
-
-    if (validKey && apiKey !== validKey) {
-      return NextResponse.json({ error: 'No autorizado' }, { status: 401 });
-    }
 
     const sql = getSQL();
     

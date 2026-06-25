@@ -166,10 +166,7 @@ export default function HomePage() {
     <>
       <nav className="navbar">
         <Link href="/" className="navbar-brand">
-          <div className="navbar-logo">P</div>
-          <div>
-            <div className="navbar-title">ParkSystem</div>
-          </div>
+          <img src="/facultad-logo.png" alt="Logo Facultad" style={{ height: '38px', width: 'auto', objectFit: 'contain' }} />
         </Link>
         <div className="navbar-nav">
           <Link href="/" className="nav-link active">Dashboard</Link>

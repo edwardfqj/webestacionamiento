@@ -13,10 +13,10 @@
    
    :root {
     /* Escala Claro (Blanco dominante) */
-    --bg-base: #e0f2fe; /* Celeste claro para prueba */
-    --bg-elevated: #bae6fd;
+    --bg-base: #ffffff;
+    --bg-elevated: #f8fafc;
     --bg-surface: #f1f5f9;
-    --bg-hover: #7dd3fc;
+    --bg-hover: #e2e8f0;
     
     --border-subtle: #e2e8f0;
     --border-strong: #cbd5e1;
@@ -25,14 +25,15 @@
     --text-secondary: #475569;
     --text-muted: #94a3b8;
 
-    /* Acentos (Azul y Rojo) */
-    --accent-primary: #1d4ed8;       
-    --accent-primary-hover: #1e3a8a; 
+    /* Acentos (Colores del Logo UCE / Facultad) */
+    --accent-primary: #005c9e;       /* Azul UCE */
+    --accent-primary-hover: #003b6f; /* Azul oscuro UCE */
+    --accent-gold: #b89047;          /* Dorado del sello */
     --accent-invert: #ffffff;        
     
     /* Semantic Colors */
-    --color-success: #2563eb; /* Azul para acciones positivas */
-    --color-error: #dc2626;   /* Rojo para acciones negativas */
+    --color-success: #005c9e; /* Azul institucional para éxito */
+    --color-error: #c00000;   /* Rojo UCE para alertas */
    
      /* Sombra y Radio */
      --radius-sm: 6px;

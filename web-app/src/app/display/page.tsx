@@ -77,7 +77,8 @@ export default function DisplayPage() {
         textAlign: 'center',
         padding: '2rem'
       }}>
-        <h1 style={{ fontSize: '4rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--accent-primary)' }}>
+        <img src="/facultad-logo.png" alt="Logo Facultad" style={{ maxWidth: '80%', maxHeight: '160px', objectFit: 'contain', marginBottom: '2rem' }} />
+        <h1 style={{ fontSize: '3.5rem', fontWeight: 800, marginBottom: '1rem', color: 'var(--accent-primary)' }}>
           SISTEMA AUTOMÁTICO
         </h1>
         <p style={{ fontSize: '2rem', color: 'var(--text-secondary)' }}>

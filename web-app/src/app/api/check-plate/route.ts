@@ -1,86 +1,15 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSQL } from '@/lib/db';
 
-// Función para limpiar y normalizar el texto de la placa por si Plate Recognizer trae guiones
-function extractPlate(rawText: string): string {
-  const cleaned = rawText
-    .replace(/\s+/g, '')
-    .replace(/[^A-Z0-9]/gi, '')
-    .toUpperCase();
-
-  return cleaned.slice(0, 8); // Máximo 8 caracteres
-}
-
-// POST /api/check-plate — recibe imagen, usa Plate Recognizer, verifica pago
+// POST /api/check-plate — Recibe JSON con la placa ganadora y actualiza la BD y la barrera
 export async function POST(request: NextRequest) {
   try {
-    const formData = await request.formData();
-    const imageFile = formData.get('image') as File | null;
+    const body = await request.json();
+    const { placa: detectedPlate, score } = body;
 
-    if (!imageFile) {
-      return NextResponse.json({ error: 'No se recibió imagen' }, { status: 400 });
+    if (!detectedPlate) {
+      return NextResponse.json({ error: 'No se recibió una placa válida' }, { status: 400 });
     }
-
-    // Usar el token del entorno o el hardcodeado por defecto para facilitar pruebas
-    const PLATE_RECOGNIZER_TOKEN = process.env.PLATE_RECOGNIZER_TOKEN || 'c9bce59d79aac07bccc3f330bc5273a3eeef8db9';
-
-    // Construir FormData para enviar a Plate Recognizer
-    const prFormData = new FormData();
-    prFormData.append('upload', imageFile);
-    // prFormData.append('regions', 'mx'); // Opcional: especificar regiones para mayor velocidad
-
-    // Llamar a Plate Recognizer API
-    const prResponse = await fetch('https://api.platerecognizer.com/v1/plate-reader/', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${PLATE_RECOGNIZER_TOKEN}`,
-      },
-      body: prFormData
-    });
-
-    if (!prResponse.ok) {
-      const errorText = await prResponse.text();
-      console.error('Error de Plate Recognizer:', errorText);
-      throw new Error(`Error de la API de Reconocimiento: ${prResponse.status}`);
-    }
-
-    const prData = await prResponse.json();
-    
-    // Extraer resultados
-    const results = prData.results || [];
-    if (results.length === 0) {
-      return NextResponse.json({
-        approved: false,
-        error: 'No se detectó ninguna placa clara',
-        raw_text: 'NULL',
-        placa: null,
-      }, { status: 200 });
-    }
-
-    // Filtrar placas con longitud válida y confianza de al menos 85% (0.85)
-    // (Ajustado a 85% para mayor tolerancia)
-    const validResults = results
-      .filter((r: any) => {
-        const plateStr = extractPlate(r.plate);
-        return plateStr && plateStr.length >= 4 && r.score >= 0.85;
-      })
-      .sort((a: any, b: any) => b.score - a.score);
-
-    if (validResults.length === 0) {
-      const debugScores = results.map((r:any) => `${r.plate}: ${(r.score*100).toFixed(1)}%`).join(' | ');
-      return NextResponse.json({
-        approved: false,
-        error: 'Confianza menor al 85% o placa muy corta',
-        message: `Filtro Activo. Detectado: ${debugScores}`,
-        raw_text: results[0] ? results[0].plate : 'NULL',
-        placa: null,
-      }, { status: 200 });
-    }
-
-    // Tomar la placa válida con mayor nivel de confianza
-    const bestMatch = validResults[0];
-    const rawPlateText = bestMatch.plate;
-    const detectedPlate = extractPlate(rawPlateText);
 
     const sql = getSQL();
     
@@ -179,14 +108,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       approved,
       placa: detectedPlate,
-      raw_text: rawPlateText, // Placa original devuelta por la API
-      confidence: bestMatch.score, // Por si lo quisieras mostrar
+      confidence: score,
       cliente: cliente ? { nombre: cliente.nombre, cedula: cliente.cedula } : null,
       message: finalMessage,
     });
 
   } catch (error: any) {
-    console.error('Error en check-plate (Plate Recognizer):', error);
-    return NextResponse.json({ error: error.message || 'Error interno procesando la imagen' }, { status: 500 });
+    console.error('Error en process-plate:', error);
+    return NextResponse.json({ error: error.message || 'Error interno procesando en base de datos' }, { status: 500 });
   }
 }

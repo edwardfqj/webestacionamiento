@@ -15,13 +15,20 @@ export async function GET(request: NextRequest) {
     }
 
     const sql = getSQL();
+    
+    // Migración perezosa
+    try {
+      await sql`ALTER TABLE gate_status ADD COLUMN IF NOT EXISTS message VARCHAR(255);`;
+      await sql`ALTER TABLE gate_status ADD COLUMN IF NOT EXISTS message_type VARCHAR(20);`;
+    } catch(e) {}
+
     const rows = await sql`
-      SELECT status, placa_scan, updated_at
+      SELECT status, placa_scan, updated_at, message, message_type
       FROM gate_status
       WHERE id = 1
     `;
 
-    const gate = rows[0] as { status: string; placa_scan: string | null; updated_at: string } | undefined;
+    const gate = rows[0] as { status: string; placa_scan: string | null; updated_at: string; message: string | null; message_type: string | null } | undefined;
     const isOpen = gate?.status === 'open';
 
     return NextResponse.json({
@@ -29,6 +36,8 @@ export async function GET(request: NextRequest) {
       placa: gate?.placa_scan ?? null,
       status: gate?.status ?? 'closed',
       updated_at: gate?.updated_at ?? null,
+      message: gate?.message ?? null,
+      message_type: gate?.message_type ?? 'info',
     });
   } catch (error) {
     console.error('Error getting gate status:', error);

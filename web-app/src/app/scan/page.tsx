@@ -70,26 +70,11 @@ export default function ScanPage() {
           setResult(data);
           setStatus('result');
           setIsAutoMode(false);
-          
-          // Hablar el mensaje
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(data.message);
-            utterance.lang = 'es-ES';
-            window.speechSynthesis.speak(utterance);
-          }
-          
-          setTimeout(reset, 8000); // Auto reset para todos los carros
+          setTimeout(reset, 4000); // Auto reset rápido para el modo automático
         }
       } else {
         setResult(data);
         setStatus('result');
-        if ('speechSynthesis' in window) {
-          window.speechSynthesis.cancel();
-          const utterance = new SpeechSynthesisUtterance(data.message);
-          utterance.lang = 'es-ES';
-          window.speechSynthesis.speak(utterance);
-        }
       }
     } catch {
       if (!isBackground) {

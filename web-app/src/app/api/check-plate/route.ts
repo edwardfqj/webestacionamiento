@@ -64,10 +64,10 @@ export async function POST(request: NextRequest) {
     // Normalizar a formato mayúscula sin guiones
     const detectedPlate = extractPlate(rawPlateText);
 
-    if (!detectedPlate || detectedPlate.length < 4) {
+    if (!detectedPlate || detectedPlate.length < 6 || bestMatch.score < 0.5) {
       return NextResponse.json({
         approved: false,
-        error: 'La placa leída es inválida o muy corta',
+        error: 'Placa leída muy corta o baja confianza',
         raw_text: rawPlateText,
         placa: null,
       }, { status: 200 });
@@ -88,9 +88,12 @@ export async function POST(request: NextRequest) {
     `;
 
     let cliente = rows[0] as { id: number; cedula: string; nombre: string; placa: string; pagado: boolean; hora_entrada: Date | null } | undefined;
-    let autoRegistrado = false;
+    
+    let approved = false;
+    let finalMessage = '';
+    let messageType = 'info';
 
-    // Si NO existe, lo auto-registramos como Visitante
+    // Si NO existe, lo auto-registramos como Visitante (ENTRANDO)
     if (!cliente) {
       const tempCedula = 'VISITANTE-' + detectedPlate;
       const res = await sql`
@@ -99,15 +102,35 @@ export async function POST(request: NextRequest) {
         RETURNING id, cedula, nombre, placa, pagado, hora_entrada
       `;
       cliente = res[0] as typeof cliente;
-      autoRegistrado = true;
+      
+      approved = true; // Puede entrar
+      finalMessage = `Bienvenido Visitante. Su placa es ${detectedPlate}.`;
+      messageType = 'success';
     } else {
-      // Si existe y no tiene hora de entrada, se la seteamos (acaba de entrar)
-      if (!cliente.hora_entrada && !cliente.pagado) {
+      // Si existe y NO tiene hora_entrada, está ENTRANDO
+      if (!cliente.hora_entrada) {
         await sql`UPDATE clientes SET hora_entrada = NOW() WHERE id = ${cliente.id}`;
+        approved = true;
+        finalMessage = `Bienvenido ${cliente.nombre}`;
+        messageType = 'success';
+      } 
+      // Si existe y TIENE hora_entrada, está SALIENDO
+      else {
+        if (cliente.pagado) {
+          // Ha pagado -> Puede salir, reseteamos su ciclo
+          await sql`UPDATE clientes SET hora_entrada = NULL WHERE id = ${cliente.id}`;
+          approved = true;
+          finalMessage = `Buen viaje ${cliente.nombre}`;
+          messageType = 'success';
+        } else {
+          // No ha pagado -> Denegado
+          approved = false;
+          finalMessage = `Acceso denegado. Diríjase a la caja para cancelar su parqueo.`;
+          messageType = 'error';
+        }
       }
     }
 
-    const approved = cliente?.pagado === true;
     const resultado = approved ? 'permitido' : 'denegado';
 
     // Registrar acceso en el log
@@ -122,21 +145,20 @@ export async function POST(request: NextRequest) {
       )
     `;
 
-    // Si está autorizado, abrir la barrera
+    // Actualizar pantalla pública (y abrir barrera si corresponde)
     if (approved) {
       await sql`
         UPDATE gate_status
-        SET status = 'open', placa_scan = ${detectedPlate}, updated_at = NOW()
+        SET status = 'open', placa_scan = ${detectedPlate}, message = ${finalMessage}, message_type = ${messageType}, updated_at = NOW()
         WHERE id = 1
       `;
-    }
-
-    // Determinar mensaje a mostrar y hablar (TTS)
-    let finalMessage = '';
-    if (approved) {
-      finalMessage = `Bienvenido ${cliente!.nombre}`;
     } else {
-      finalMessage = `Recuerde acercarse a pagar al punto de pago antes de salir`;
+      // Solo actualizamos el mensaje, sin abrir
+      await sql`
+        UPDATE gate_status
+        SET placa_scan = ${detectedPlate}, message = ${finalMessage}, message_type = ${messageType}, updated_at = NOW()
+        WHERE id = 1
+      `;
     }
 
     return NextResponse.json({

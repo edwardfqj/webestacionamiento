@@ -6,7 +6,7 @@ export async function GET() {
   try {
     const sql = getSQL();
     const rows = await sql`
-      SELECT id, cedula, nombre, placa, pagado, created_at, updated_at
+      SELECT id, cedula, nombre, placa, pagado, created_at, updated_at, hora_entrada
       FROM clientes
       ORDER BY nombre ASC
     `;

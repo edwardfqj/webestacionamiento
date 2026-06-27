@@ -30,13 +30,13 @@
 // CONFIGURACIÓN DE RED WIFI (Elige Normal o Universitaria)
 // ============================================================
 // Descomenta (quita las //) de la siguiente línea si vas a usar WiFi de Universidad con Usuario/Contraseña:
-// #define WIFI_UNIVERSIDAD
+#define WIFI_UNIVERSIDAD
 
 #ifdef WIFI_UNIVERSIDAD
-  const char *WIFI_SSID    = "WiFi_Universidad";       // Nombre de la red WiFi de la universidad
-  const char *EAP_IDENTITY = "usuario@uni.edu.ec";     // Identidad anónima o correo institucional
-  const char *EAP_USERNAME = "usuario";                // Tu usuario institucional
-  const char *EAP_PASSWORD = "tu_contraseña";          // Contraseña del correo/universidad
+  const char *WIFI_SSID    = "UCE";       // Nombre de la red WiFi de la universidad
+  const char *EAP_IDENTITY = "ceduque@uce.edu.ec";     // Identidad anónima o correo institucional
+  const char *EAP_USERNAME = "ceduque";                // Tu usuario institucional
+  const char *EAP_PASSWORD = "cedm2022*";          // Contraseña del correo/universidad
 #else
   const char *WIFI_SSID     = "Galaxy A316AF9";        // Nombre de tu red WiFi normal
   const char *WIFI_PASSWORD = "lufx0428";              // Contraseña de tu red WiFi normal
@@ -159,21 +159,27 @@ void connectWiFi() {
 
 #ifdef WIFI_UNIVERSIDAD
   Serial.println("[WIFI] Configurando autenticación WPA2 Enterprise (Universidad)...");
-  esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+  
+  // Si EAP_IDENTITY está vacío "", usamos EAP_USERNAME por defecto (vital en servidores RADIUS universitarios como UCE)
+  const char* id_to_use = (strlen(EAP_IDENTITY) > 0) ? EAP_IDENTITY : EAP_USERNAME;
+  
+  esp_wifi_sta_wpa2_ent_clear_identity();
+  esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)id_to_use, strlen(id_to_use));
   esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_USERNAME, strlen(EAP_USERNAME));
   esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
   esp_wifi_sta_wpa2_ent_enable();
+  
   WiFi.begin(WIFI_SSID);
 #else
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 #endif
 
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 30) {
+  // Las redes universitarias (802.1X RADIUS) tardan más en negociar los certificados, damos 25 segundos (50 intentos)
+  while (WiFi.status() != WL_CONNECTED && attempts < 50) {
     delay(500);
     Serial.print(".");
     attempts++;
-    // Parpadeo rápido mientras conecta
     digitalWrite(PIN_LED, !digitalRead(PIN_LED));
   }
 

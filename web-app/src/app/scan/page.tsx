@@ -22,7 +22,6 @@ export default function ScanPage() {
   const webcamRef = useRef<Webcam>(null);
   const isScanningRef = useRef(false);
   const bufferTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const cooldownRef = useRef(false); // Cooldown para no gastar API
 
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -39,17 +38,14 @@ export default function ScanPage() {
   const [zoomLevel, setZoomLevel] = useState(1);
   const [maxZoom, setMaxZoom] = useState(1);
 
-  // Contador de llamadas a la API (para referencia del usuario)
+  // Contador de llamadas a la API
   const [apiCallCount, setApiCallCount] = useState(0);
-  const [cooldownSeconds, setCooldownSeconds] = useState(0);
 
   const startCamera = () => {
     setErrorMsg('');
     setStatus('camera');
     setIsAutoMode(true);
     setScanBuffer([]);
-    cooldownRef.current = false;
-    setCooldownSeconds(0);
   };
 
   const stopCamera = () => {
@@ -92,35 +88,13 @@ export default function ScanPage() {
     }
   }, []);
 
-  // Detectar capacidades de zoom cuando la cámara se inicializa
   useEffect(() => {
     if (status !== 'camera') return;
     const timer = setTimeout(() => {
       applyZoom(zoomLevel);
-    }, 1500); // Esperar a que la cámara se inicialice
+    }, 1500);
     return () => clearTimeout(timer);
-  }, [status]);
-
-  // Temporizador visual de cooldown
-  useEffect(() => {
-    if (cooldownSeconds <= 0) return;
-    const timer = setInterval(() => {
-      setCooldownSeconds(prev => {
-        if (prev <= 1) {
-          cooldownRef.current = false;
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [cooldownSeconds]);
-
-  // Iniciar cooldown de 30 segundos tras procesar una placa
-  const startCooldown = () => {
-    cooldownRef.current = true;
-    setCooldownSeconds(30);
-  };
+  }, [status, applyZoom, zoomLevel]);
 
   const evaluateBufferAndProcess = async (finalBuffer: PlateReading[], isBackground: boolean) => {
     const counts: Record<string, number> = {};
@@ -166,30 +140,21 @@ export default function ScanPage() {
       setIsAutoMode(false);
       setScanBuffer([]);
       
-      // Activar cooldown de 30s para no desperdiciar llamadas a la API
-      startCooldown();
-      
       if (isBackground) {
-        setTimeout(reset, 8000); // Volver a escanear tras 8 seg
+        setTimeout(reset, 6000); // Volver a escanear tras 6 seg
       }
     } catch (err: any) {
       setResult({ approved: false, placa: null, message: err?.message || 'Error Procesando Accesos (500)' });
       setStatus('result');
       setIsAutoMode(false);
-      setTimeout(reset, 8000);
+      setTimeout(reset, 6000);
     }
   };
 
   const captureAndSend = useCallback(async (isBackground = false) => {
     if (!webcamRef.current || isScanningRef.current) return;
-    
-    // Si estamos en cooldown, no gastar llamadas a la API
-    if (isBackground && cooldownRef.current) {
-      setDebugText(`Cooldown: ${cooldownSeconds}s restantes...`);
-      return;
-    }
 
-    const imageSrc = webcamRef.current.getScreenshot({ width: 1280, height: 720 });
+    const imageSrc = webcamRef.current.getScreenshot({ width: 1920, height: 1080 });
     if (!imageSrc) {
       if (!isBackground) setErrorMsg('Error de captura local.');
       return;
@@ -250,33 +215,35 @@ export default function ScanPage() {
       setResult({ approved: false, placa: null, message: err?.message || 'Error Interno del Servidor (500)' });
       setStatus('result');
       setIsAutoMode(false);
-      setTimeout(reset, 8000);
+      setTimeout(reset, 6000);
     } finally {
       isScanningRef.current = false;
       setIsScanningBg(false);
     }
-  }, [reset, cooldownSeconds]);
+  }, [reset]);
 
   useEffect(() => {
     if (status !== 'camera' || !isAutoMode) return;
-    // Escanear cada 4 segundos (antes era 1.5s, ahora es más conservador con la API)
-    const timer = setInterval(() => captureAndSend(true), 4000);
+    // Intervalo constante y predecible de 3.5 segundos sin bloqueos ni detección de auto externa
+    const timer = setInterval(() => captureAndSend(true), 3500);
     return () => clearInterval(timer);
   }, [status, isAutoMode, captureAndSend]);
 
   return (
     <div className="scan-wrapper">
-      <nav className="navbar">
-        <Link href="/" className="navbar-brand">
-          <img src="/facultad-logo.png" alt="Logo Facultad" style={{ height: '38px', width: 'auto', objectFit: 'contain' }} />
-        </Link>
-        <div className="navbar-nav">
-          <Link href="/" className="nav-link">Dashboard</Link>
-          <Link href="/scan" className="nav-link active">Scanner</Link>
-        </div>
-      </nav>
+      {status !== 'camera' && (
+        <nav className="navbar">
+          <Link href="/" className="navbar-brand">
+            <img src="/facultad-logo.png" alt="Logo Facultad" style={{ height: '38px', width: 'auto', objectFit: 'contain' }} />
+          </Link>
+          <div className="navbar-nav">
+            <Link href="/" className="nav-link">Dashboard</Link>
+            <Link href="/scan" className="nav-link active">Scanner</Link>
+          </div>
+        </nav>
+      )}
 
-      <main className="scan-main">
+      <main className={status === 'camera' ? '' : 'scan-main'}>
         {status === 'idle' && (
           <div style={{ textAlign: 'center', maxWidth: 400 }}>
             <h2 className="page-title" style={{ marginBottom: '1rem' }}>ALPR System</h2>
@@ -291,75 +258,170 @@ export default function ScanPage() {
         )}
 
         {status === 'camera' && (
-          <div style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className="camera-box">
-              <Webcam
-                audio={false}
-                ref={webcamRef}
-                screenshotFormat="image/jpeg"
-                videoConstraints={{ 
-                  facingMode: 'environment', 
-                  width: 1920, 
-                  height: 1080,
-                  focusMode: 'continuous' as any,
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            width: '100vw',
+            height: '100vh',
+            backgroundColor: '#000',
+            zIndex: 1000,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            overflow: 'hidden'
+          }}>
+            {/* Cámara a pantalla completa y horizontal */}
+            <Webcam
+              audio={false}
+              ref={webcamRef}
+              screenshotFormat="image/jpeg"
+              videoConstraints={{ 
+                facingMode: 'environment', 
+                width: 1920, 
+                height: 1080,
+                aspectRatio: 16 / 9,
+                focusMode: 'continuous' as any,
+              }}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover'
+              }}
+            />
+
+            {/* Overlay superior: Botón salir, indicador de estado y progreso */}
+            <div style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              right: 0,
+              padding: '1rem',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%)',
+              zIndex: 10
+            }}>
+              <button 
+                onClick={stopCamera}
+                style={{
+                  background: 'rgba(255,255,255,0.2)',
+                  border: 'none',
+                  color: 'white',
+                  padding: '8px 16px',
+                  borderRadius: '20px',
+                  backdropFilter: 'blur(4px)',
+                  fontWeight: 600,
+                  cursor: 'pointer'
                 }}
-                className="camera-video"
-              />
-              <div className="camera-overlay">
-                <div className="focus-frame" />
-              </div>
-              
-              {/* Indicador de progreso */}
-              <div className="scan-status-pill" style={{ top: '1rem' }}>
+              >
+                ✕ Suspender
+              </button>
+
+              <div style={{
+                background: 'rgba(0,0,0,0.6)',
+                backdropFilter: 'blur(4px)',
+                border: '1px solid rgba(255,255,255,0.15)',
+                padding: '6px 16px',
+                borderRadius: '20px',
+                fontSize: '0.8rem',
+                color: 'white',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px'
+              }}>
                 <div className="scan-dot" />
-                {cooldownRef.current 
-                  ? `Espera ${cooldownSeconds}s` 
-                  : isScanningBg 
-                    ? 'Analyzing' 
-                    : 'Standby'}
+                {isScanningBg ? 'Analizando placa...' : 'Escaneando'}
               </div>
-              
-              {/* Progreso del buffer (Mejor de 3) */}
-              {scanBuffer.length > 0 && (
+
+              {scanBuffer.length > 0 ? (
                 <div style={{
-                  position: 'absolute', top: '3.5rem', left: '50%', transform: 'translateX(-50%)',
-                  background: 'var(--accent-primary)', color: 'white', padding: '6px 16px',
-                  borderRadius: 'var(--radius-full)', fontSize: '0.85rem', fontWeight: 600,
-                  boxShadow: '0 4px 12px rgba(0,0,0,0.3)',
+                  background: 'var(--accent-primary)',
+                  color: 'white',
+                  padding: '6px 14px',
+                  borderRadius: '20px',
+                  fontSize: '0.8rem',
+                  fontWeight: 700
                 }}>
-                  Recolectando: {scanBuffer.length}/3
+                  {scanBuffer.length}/3
+                </div>
+              ) : <div style={{ width: 60 }} />}
+            </div>
+
+            {/* Guía horizontal central de enfoque para la placa */}
+            <div style={{
+              position: 'absolute',
+              width: '85%',
+              maxWidth: '420px',
+              height: '120px',
+              border: '2px solid rgba(255, 255, 255, 0.6)',
+              borderRadius: '12px',
+              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
+              pointerEvents: 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <span style={{
+                color: 'rgba(255, 255, 255, 0.7)',
+                fontSize: '0.75rem',
+                letterSpacing: '1px',
+                textTransform: 'uppercase',
+                background: 'rgba(0,0,0,0.6)',
+                padding: '4px 10px',
+                borderRadius: '4px'
+              }}>
+                ALINEAR PLACA AQUÍ
+              </span>
+            </div>
+
+            {/* Overlay inferior: Zoom y controles */}
+            <div style={{
+              position: 'absolute',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              padding: '1.5rem 1rem',
+              background: 'linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0) 100%)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '12px',
+              zIndex: 10
+            }}>
+              {/* Control de Zoom */}
+              {maxZoom > 1 && (
+                <div style={{ 
+                  width: '80%', maxWidth: '300px',
+                  display: 'flex', alignItems: 'center', gap: '8px',
+                  background: 'rgba(0,0,0,0.6)', padding: '6px 14px', borderRadius: '20px',
+                  backdropFilter: 'blur(4px)'
+                }}>
+                  <span style={{ fontSize: '0.8rem', color: '#fff' }}>🔍</span>
+                  <input 
+                    type="range" 
+                    min="1" 
+                    max={maxZoom} 
+                    step="0.1"
+                    value={zoomLevel}
+                    onChange={(e) => applyZoom(parseFloat(e.target.value))}
+                    style={{ flex: 1, accentColor: 'var(--accent-primary)' }}
+                  />
+                  <span style={{ fontSize: '0.8rem', color: '#fff', minWidth: '35px', fontWeight: 600 }}>{zoomLevel.toFixed(1)}x</span>
                 </div>
               )}
-            </div>
-            
-            {/* Control de Zoom */}
-            {maxZoom > 1 && (
-              <div style={{ 
-                width: '80%', maxWidth: '300px', marginTop: '1rem',
-                display: 'flex', alignItems: 'center', gap: '0.5rem'
-              }}>
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>🔍</span>
-                <input 
-                  type="range" 
-                  min="1" 
-                  max={maxZoom} 
-                  step="0.1"
-                  value={zoomLevel}
-                  onChange={(e) => applyZoom(parseFloat(e.target.value))}
-                  style={{ flex: 1, accentColor: 'var(--accent-primary)' }}
-                />
-                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '35px' }}>{zoomLevel.toFixed(1)}x</span>
+
+              {/* Debug y conteo de llamadas */}
+              <div style={{ fontSize: '0.8rem', color: 'rgba(255,255,255,0.8)', textAlign: 'center' }}>
+                {debugText || 'Apunte la cámara hacia la placa del vehículo'} {apiCallCount > 0 && `(API: ${apiCallCount})`}
               </div>
-            )}
 
-            {/* Debug + conteo de API */}
-            <div style={{ marginTop: '0.5rem', height: '20px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {debugText} {apiCallCount > 0 && `| API: ${apiCallCount} llamadas`}
-            </div>
-
-            <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
-              <button className="btn btn-secondary" onClick={stopCamera}>Suspender</button>
-              <button className="btn btn-primary" onClick={() => captureAndSend(false)} disabled={isScanningBg}>
+              <button 
+                className="btn btn-primary" 
+                style={{ width: '100%', maxWidth: '320px', padding: '12px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                onClick={() => captureAndSend(false)} 
+                disabled={isScanningBg}
+              >
                 Forzar Lectura Única
               </button>
             </div>

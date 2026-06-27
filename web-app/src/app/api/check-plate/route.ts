@@ -31,7 +31,10 @@ export async function POST(request: NextRequest) {
     let finalMessage = '';
     let messageType = 'info';
 
-    // Si NO existe, lo auto-registramos como Visitante (ENTRANDO)
+    // Verificar si es un visitante
+    const isVisitor = cliente ? (cliente.cedula.startsWith('VISITANTE-') || cliente.nombre === 'Visitante') : true;
+
+    // Si NO existe en BD, lo auto-registramos como Visitante (ENTRANDO)
     if (!cliente) {
       const tempCedula = 'VISITANTE-' + detectedPlate;
       const res = await sql`
@@ -41,27 +44,38 @@ export async function POST(request: NextRequest) {
       `;
       cliente = res[0] as typeof cliente;
       
-      approved = true; // Puede entrar
-      finalMessage = `Bienvenido Visitante. Recuerde pasar por caja para cancelar su parqueo antes de salir.`;
+      approved = true;
+      finalMessage = `Bienvenido Visitante. Recuerde pasar por caja a pagar su parqueo antes de salir.`;
       messageType = 'success';
     } else {
       // Si existe y NO tiene hora_entrada, está ENTRANDO
       if (!cliente.hora_entrada) {
-        await sql`UPDATE clientes SET hora_entrada = NOW(), pagado = false WHERE id = ${cliente.id}`;
-        approved = true;
-        finalMessage = `Bienvenido ${cliente.nombre}. Recuerde pasar por caja a cancelar antes de salir.`;
+        if (isVisitor) {
+          await sql`UPDATE clientes SET hora_entrada = NOW(), pagado = false WHERE id = ${cliente.id}`;
+          approved = true;
+          finalMessage = `Bienvenido Visitante. Recuerde pasar por caja a cancelar antes de salir.`;
+        } else {
+          // Cliente Registrado: NO modificamos su estado de mensualidad (pagado)
+          await sql`UPDATE clientes SET hora_entrada = NOW() WHERE id = ${cliente.id}`;
+          approved = true;
+          if (!cliente.pagado) {
+            finalMessage = `Bienvenido ${cliente.nombre}. Recuerde cancelar su mensualidad ($20) antes de salir.`;
+          } else {
+            finalMessage = `Bienvenido ${cliente.nombre}`;
+          }
+        }
         messageType = 'success';
       } 
       // Si existe y TIENE hora_entrada, está SALIENDO
       else {
         if (cliente.pagado) {
-          // Ha pagado -> Puede salir
-          if (cliente.cedula.startsWith('VISITANTE-') || cliente.nombre === 'Visitante') {
-            // Eliminar de la base de datos al visitante que ya salió
+          // Ha pagado (horas de visitante o mensualidad de cliente) -> Puede salir
+          if (isVisitor) {
+            // Eliminar al visitante de la BD al salir
             await sql`DELETE FROM clientes WHERE id = ${cliente.id}`;
           } else {
-            // Cliente registrado -> Reseteamos su ciclo y ponemos pagado en false para su próxima visita
-            await sql`UPDATE clientes SET hora_entrada = NULL, pagado = false WHERE id = ${cliente.id}`;
+            // Cliente registrado -> Reseteamos su hora de entrada, pero CONSERVAMOS su mensualidad pagada (pagado = true)
+            await sql`UPDATE clientes SET hora_entrada = NULL WHERE id = ${cliente.id}`;
           }
           approved = true;
           finalMessage = `Buen viaje ${cliente.nombre}`;
@@ -69,7 +83,11 @@ export async function POST(request: NextRequest) {
         } else {
           // No ha pagado -> Denegado
           approved = false;
-          finalMessage = `Acceso denegado. Diríjase a la caja para cancelar su parqueo.`;
+          if (isVisitor) {
+            finalMessage = `Acceso denegado. Diríjase a la caja para cancelar las horas de parqueo.`;
+          } else {
+            finalMessage = `Acceso denegado. Diríjase a la caja para cancelar su mensualidad de $20.`;
+          }
           messageType = 'error';
         }
       }

@@ -167,11 +167,19 @@ void connectWiFi() {
   // Si EAP_IDENTITY está vacío "", usamos EAP_USERNAME por defecto (vital en servidores RADIUS universitarios como UCE)
   const char* id_to_use = (strlen(EAP_IDENTITY) > 0) ? EAP_IDENTITY : EAP_USERNAME;
   
+#if __has_include("esp_eap_client.h")
+  esp_eap_client_clear_identity();
+  esp_eap_client_set_identity((uint8_t *)id_to_use, strlen(id_to_use));
+  esp_eap_client_set_username((uint8_t *)EAP_USERNAME, strlen(EAP_USERNAME));
+  esp_eap_client_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
+  esp_wifi_sta_enterprise_enable();
+#else
   esp_wifi_sta_wpa2_ent_clear_identity();
   esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)id_to_use, strlen(id_to_use));
   esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_USERNAME, strlen(EAP_USERNAME));
   esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
   esp_wifi_sta_wpa2_ent_enable();
+#endif
   
   WiFi.begin(WIFI_SSID);
 #else

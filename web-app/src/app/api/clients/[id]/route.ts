@@ -23,7 +23,7 @@ export async function PATCH(
       if (pagado === true) {
         await sql`
           UPDATE clientes
-          SET pagado = true, hora_entrada = NULL, updated_at = NOW()
+          SET pagado = true, updated_at = NOW()
           WHERE id = ${id}
         `;
       } else {

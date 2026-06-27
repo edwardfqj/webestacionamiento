@@ -96,7 +96,7 @@ export default function HomePage() {
         body: JSON.stringify({ pagado: !client.pagado }),
       });
       if (!res.ok) throw new Error();
-      setClients(prev => prev.map(c => c.id === client.id ? { ...c, pagado: !c.pagado, hora_entrada: !c.pagado ? null : c.hora_entrada } : c));
+      setClients(prev => prev.map(c => c.id === client.id ? { ...c, pagado: !c.pagado } : c));
       if (!client.pagado) showToast('success', 'Pago registrado exitosamente.');
     } catch {
       showToast('error', 'No se pudo actualizar el estado');

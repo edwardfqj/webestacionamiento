@@ -24,7 +24,11 @@
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
 #include <esp_wifi.h>
-#include "esp_wpa2.h" // Librería necesaria para redes WPA2 Enterprise (Universidad)
+#if __has_include("esp_eap_client.h")
+#include "esp_eap_client.h" // ESP32 Core v3.x+ (Elimina el aviso deprecated)
+#else
+#include "esp_wpa2.h"       // ESP32 Core v2.x
+#endif
 
 // ============================================================
 // CONFIGURACIÓN DE RED WIFI (Elige Normal o Universitaria)

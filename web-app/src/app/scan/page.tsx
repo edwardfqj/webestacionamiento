@@ -22,6 +22,7 @@ export default function ScanPage() {
   const webcamRef = useRef<Webcam>(null);
   const isScanningRef = useRef(false);
   const bufferTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const cooldownRef = useRef(false); // Cooldown para no gastar API
 
   const [status, setStatus] = useState<ScanStatus>('idle');
   const [result, setResult] = useState<ScanResult | null>(null);
@@ -34,11 +35,21 @@ export default function ScanPage() {
   const [scanBuffer, setScanBuffer] = useState<PlateReading[]>([]);
   const [debugText, setDebugText] = useState('');
 
+  // Zoom de la cámara
+  const [zoomLevel, setZoomLevel] = useState(1);
+  const [maxZoom, setMaxZoom] = useState(1);
+
+  // Contador de llamadas a la API (para referencia del usuario)
+  const [apiCallCount, setApiCallCount] = useState(0);
+  const [cooldownSeconds, setCooldownSeconds] = useState(0);
+
   const startCamera = () => {
     setErrorMsg('');
     setStatus('camera');
     setIsAutoMode(true);
     setScanBuffer([]);
+    cooldownRef.current = false;
+    setCooldownSeconds(0);
   };
 
   const stopCamera = () => {
@@ -57,8 +68,61 @@ export default function ScanPage() {
     setDebugText('');
   }, []);
 
+  // Aplicar zoom a la cámara
+  const applyZoom = useCallback(async (zoom: number) => {
+    try {
+      const video = webcamRef.current?.video;
+      if (!video) return;
+      const stream = video.srcObject as MediaStream;
+      if (!stream) return;
+      const track = stream.getVideoTracks()[0];
+      if (!track) return;
+      
+      const capabilities = track.getCapabilities?.();
+      if (capabilities?.zoom) {
+        const max = (capabilities.zoom as any).max || 1;
+        const min = (capabilities.zoom as any).min || 1;
+        setMaxZoom(max);
+        const clampedZoom = Math.min(Math.max(zoom, min), max);
+        await track.applyConstraints({ advanced: [{ zoom: clampedZoom } as any] });
+        setZoomLevel(clampedZoom);
+      }
+    } catch (e) {
+      // El navegador o la cámara no soporta zoom
+    }
+  }, []);
+
+  // Detectar capacidades de zoom cuando la cámara se inicializa
+  useEffect(() => {
+    if (status !== 'camera') return;
+    const timer = setTimeout(() => {
+      applyZoom(zoomLevel);
+    }, 1500); // Esperar a que la cámara se inicialice
+    return () => clearTimeout(timer);
+  }, [status]);
+
+  // Temporizador visual de cooldown
+  useEffect(() => {
+    if (cooldownSeconds <= 0) return;
+    const timer = setInterval(() => {
+      setCooldownSeconds(prev => {
+        if (prev <= 1) {
+          cooldownRef.current = false;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [cooldownSeconds]);
+
+  // Iniciar cooldown de 30 segundos tras procesar una placa
+  const startCooldown = () => {
+    cooldownRef.current = true;
+    setCooldownSeconds(30);
+  };
+
   const evaluateBufferAndProcess = async (finalBuffer: PlateReading[], isBackground: boolean) => {
-    // 1. Lógica de votación
     const counts: Record<string, number> = {};
     let maxCount = 0;
     
@@ -71,20 +135,16 @@ export default function ScanPage() {
     let winningScore = 0;
 
     if (maxCount >= 2) {
-      // Gana por mayoría
       winningPlate = Object.keys(counts).find(k => counts[k] === maxCount)!;
-      // Tomar el score más alto de la placa ganadora
       winningScore = Math.max(...finalBuffer.filter(r => r.placa === winningPlate).map(r => r.score));
     } else {
-      // Todas son diferentes (maxCount === 1), gana el mayor porcentaje
       const bestReading = finalBuffer.reduce((prev, current) => (prev.score > current.score) ? prev : current);
       winningPlate = bestReading.placa;
       winningScore = bestReading.score;
     }
 
-    setDebugText(`Evaluando... Ganador: ${winningPlate} (${(winningScore * 100).toFixed(1)}%)`);
+    setDebugText(`Ganador: ${winningPlate} (${(winningScore * 100).toFixed(1)}%)`);
 
-    // 2. Enviar a base de datos
     try {
       if (!isBackground) setStatus('processing');
 
@@ -106,8 +166,11 @@ export default function ScanPage() {
       setIsAutoMode(false);
       setScanBuffer([]);
       
+      // Activar cooldown de 30s para no desperdiciar llamadas a la API
+      startCooldown();
+      
       if (isBackground) {
-        setTimeout(reset, 5000); // Volver a escanear tras 5 seg
+        setTimeout(reset, 8000); // Volver a escanear tras 8 seg
       }
     } catch (err: any) {
       setResult({ approved: false, placa: null, message: err?.message || 'Error Procesando Accesos (500)' });
@@ -119,6 +182,12 @@ export default function ScanPage() {
 
   const captureAndSend = useCallback(async (isBackground = false) => {
     if (!webcamRef.current || isScanningRef.current) return;
+    
+    // Si estamos en cooldown, no gastar llamadas a la API
+    if (isBackground && cooldownRef.current) {
+      setDebugText(`Cooldown: ${cooldownSeconds}s restantes...`);
+      return;
+    }
 
     const imageSrc = webcamRef.current.getScreenshot({ width: 1280, height: 720 });
     if (!imageSrc) {
@@ -136,7 +205,6 @@ export default function ScanPage() {
       const formData = new FormData();
       formData.append('image', blob, 'plate.jpg');
 
-      // Solo reconocer texto
       const response = await fetch('/api/recognize', { method: 'POST', body: formData });
       if (!response.ok) {
         let errStr = 'Error desconocido del servidor OCR';
@@ -144,25 +212,21 @@ export default function ScanPage() {
         throw new Error(errStr);
       }
       
+      setApiCallCount(prev => prev + 1);
       const data = await response.json();
 
       if (data.valid && data.placa) {
-        // Encontramos una placa válida
         const newReading = { placa: data.placa, score: data.score };
-        
-        // Actualizar UI
         setDebugText(`Leído: ${data.placa} (${(data.score * 100).toFixed(1)}%)`);
         
         setScanBuffer(prev => {
           const newBuffer = [...prev, newReading];
           
           if (newBuffer.length >= 3) {
-            // Ya tenemos 3 lecturas, procesar acceso
             evaluateBufferAndProcess(newBuffer, isBackground);
-            return []; // Vaciar memoria visualmente de inmediato
+            return [];
           }
           
-          // Resetear temporizador de olvido (si el carro se va a medias)
           if (bufferTimeoutRef.current) clearTimeout(bufferTimeoutRef.current);
           bufferTimeoutRef.current = setTimeout(() => {
             setScanBuffer([]);
@@ -174,11 +238,10 @@ export default function ScanPage() {
 
       } else {
         if (data.message) {
-          setDebugText(data.message); // Mostrar por qué el filtro falló
+          setDebugText(data.message);
         }
         
         if (!isBackground) {
-          // Si el usuario forzó y no se detectó nada
           setResult({ approved: false, placa: null, message: data.message || 'No se detectó placa' });
           setStatus('result');
         }
@@ -192,12 +255,12 @@ export default function ScanPage() {
       isScanningRef.current = false;
       setIsScanningBg(false);
     }
-  }, [reset]);
+  }, [reset, cooldownSeconds]);
 
   useEffect(() => {
     if (status !== 'camera' || !isAutoMode) return;
-    // Escanear rápido: cada 1.5 segundos para recolectar 3 muestras rápido
-    const timer = setInterval(() => captureAndSend(true), 1500);
+    // Escanear cada 4 segundos (antes era 1.5s, ahora es más conservador con la API)
+    const timer = setInterval(() => captureAndSend(true), 4000);
     return () => clearInterval(timer);
   }, [status, isAutoMode, captureAndSend]);
 
@@ -234,17 +297,26 @@ export default function ScanPage() {
                 audio={false}
                 ref={webcamRef}
                 screenshotFormat="image/jpeg"
-                videoConstraints={{ facingMode: 'environment', width: 1920, height: 1080 }}
+                videoConstraints={{ 
+                  facingMode: 'environment', 
+                  width: 1920, 
+                  height: 1080,
+                  focusMode: 'continuous' as any,
+                }}
                 className="camera-video"
               />
               <div className="camera-overlay">
                 <div className="focus-frame" />
               </div>
               
-              {/* Indicador de progreso de lecturas */}
+              {/* Indicador de progreso */}
               <div className="scan-status-pill" style={{ top: '1rem' }}>
                 <div className="scan-dot" />
-                {isScanningBg ? 'Analyzing' : 'Standby'}
+                {cooldownRef.current 
+                  ? `Espera ${cooldownSeconds}s` 
+                  : isScanningBg 
+                    ? 'Analyzing' 
+                    : 'Standby'}
               </div>
               
               {/* Progreso del buffer (Mejor de 3) */}
@@ -260,9 +332,29 @@ export default function ScanPage() {
               )}
             </div>
             
-            {/* Debug Texto para entender qué está viendo la IA */}
-            <div style={{ marginTop: '1rem', height: '20px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-              {debugText}
+            {/* Control de Zoom */}
+            {maxZoom > 1 && (
+              <div style={{ 
+                width: '80%', maxWidth: '300px', marginTop: '1rem',
+                display: 'flex', alignItems: 'center', gap: '0.5rem'
+              }}>
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>🔍</span>
+                <input 
+                  type="range" 
+                  min="1" 
+                  max={maxZoom} 
+                  step="0.1"
+                  value={zoomLevel}
+                  onChange={(e) => applyZoom(parseFloat(e.target.value))}
+                  style={{ flex: 1, accentColor: 'var(--accent-primary)' }}
+                />
+                <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)', minWidth: '35px' }}>{zoomLevel.toFixed(1)}x</span>
+              </div>
+            )}
+
+            {/* Debug + conteo de API */}
+            <div style={{ marginTop: '0.5rem', height: '20px', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              {debugText} {apiCallCount > 0 && `| API: ${apiCallCount} llamadas`}
             </div>
 
             <div style={{ display: 'flex', gap: '1rem', marginTop: '1rem' }}>
@@ -307,7 +399,7 @@ export default function ScanPage() {
             </div>
 
             <div style={{ marginTop: '2rem' }}>
-              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Restableciendo sistema automǭticamente...</p>
+              <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Restableciendo sistema automáticamente...</p>
               {!isAutoMode && (
                 <button className="btn btn-secondary" style={{ width: '100%', marginTop: '1rem' }} onClick={reset}>Forzar Escaneo Continuo</button>
               )}

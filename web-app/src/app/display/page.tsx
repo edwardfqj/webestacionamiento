@@ -16,6 +16,7 @@ export default function DisplayPage() {
   const [debugLog, setDebugLog] = useState<string>('Iniciando...');
   const lastUpdateRef = useRef<string | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasSpokenRef = useRef<string | null>(null); // Evitar sonido doble
 
   useEffect(() => {
     const fetchStatus = async () => {
@@ -28,20 +29,25 @@ export default function DisplayPage() {
         }
 
         const data: GateStatus = await res.json();
-        setDebugLog(`OK | msg: "${data.message}" | type: ${data.message_type} | updated: ${data.updated_at} | last: ${lastUpdateRef.current}`);
+        setDebugLog(`OK | msg: "${data.message}" | type: ${data.message_type} | updated: ${data.updated_at}`);
 
-        // Si hay un nuevo mensaje
+        // Si hay un nuevo mensaje (updated_at cambió)
         if (data.updated_at && data.updated_at !== lastUpdateRef.current && data.message) {
           lastUpdateRef.current = data.updated_at;
           setGateData(data);
 
-          // Reproducir audio
-          if ('speechSynthesis' in window) {
-            window.speechSynthesis.cancel();
-            const utterance = new SpeechSynthesisUtterance(data.message);
-            utterance.lang = 'es-ES';
-            utterance.rate = 0.9;
-            window.speechSynthesis.speak(utterance);
+          // Solo reproducir audio SI no lo hemos dicho ya para este timestamp exacto
+          if (hasSpokenRef.current !== data.updated_at && 'speechSynthesis' in window) {
+            hasSpokenRef.current = data.updated_at; // Marcar como ya dicho ANTES de hablar
+            window.speechSynthesis.cancel(); // Cancelar cualquier audio anterior
+            
+            // Pequeño delay para asegurar que cancel() se procesó
+            setTimeout(() => {
+              const utterance = new SpeechSynthesisUtterance(data.message!);
+              utterance.lang = 'es-ES';
+              utterance.rate = 0.9;
+              window.speechSynthesis.speak(utterance);
+            }, 100);
           }
 
           // Limpiar timeout anterior si existe
@@ -56,11 +62,10 @@ export default function DisplayPage() {
       }
     };
 
-    // Consultar inmediatamente y luego cada 2 segundos
     fetchStatus();
     const interval = setInterval(fetchStatus, 2000);
     return () => clearInterval(interval);
-  }, []); // Sin dependencias - el interval nunca se recrea
+  }, []);
 
   // Pantalla de espera (standby)
   if (!gateData || !gateData.message) {
@@ -96,7 +101,6 @@ export default function DisplayPage() {
     );
   }
 
-  // Mostrar mensaje de éxito o error
   const isSuccess = gateData.message_type === 'success';
 
   return (

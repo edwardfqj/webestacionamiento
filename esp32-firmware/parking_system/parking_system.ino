@@ -31,7 +31,7 @@ const char *WIFI_SSID = "faby";         // Nombre de tu red WiFi
 const char *WIFI_PASSWORD = "12345678"; // Contraseña de tu red WiFi
 
 // URL de tu servidor en Vercel (Internet)
-const char *SERVER_URL = "https://webestacionamiento.vercel.app";
+const char *SERVER_URL = "https://webestacionamiento-six.vercel.app";
 
 // API Key (debe coincidir con ESP32_API_KEY en las variables de entorno de
 // Vercel)

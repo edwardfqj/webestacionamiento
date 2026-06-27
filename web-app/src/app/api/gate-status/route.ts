@@ -53,17 +53,32 @@ export async function POST(request: NextRequest) {
     const method = body.method || 'desconocido';
 
     const sql = getSQL();
-    await sql`
-      UPDATE gate_status
-      SET status = ${newStatus}, updated_at = NOW()
-      WHERE id = 1
-    `;
 
-    // Si fue abierto por pulsador manual, registramos el evento en accesos
-    if (newStatus === 'open' && method === 'pulsador') {
+    if (newStatus === 'closed') {
+      // Al cerrar la barrera, limpiamos el mensaje y la placa para que la interfaz display no vuelva a repetir la bienvenida/despedida
+      await sql`
+        UPDATE gate_status
+        SET status = 'closed', updated_at = NOW(), message = NULL, message_type = NULL, placa_scan = NULL
+        WHERE id = 1
+      `;
+    } else if (newStatus === 'open' && method === 'pulsador') {
+      // Apertura manual por botón
+      await sql`
+        UPDATE gate_status
+        SET status = 'open', updated_at = NOW(), message = 'Apertura Manual por Botón', message_type = 'info', placa_scan = 'MANUAL'
+        WHERE id = 1
+      `;
       await sql`
         INSERT INTO accesos (placa, nombre, resultado, metodo)
         VALUES ('MANUAL', 'Apertura por Botón', 'permitido', 'pulsador')
+      `;
+    } else {
+      // Si el ESP32 notifica apertura por cámara (method === 'camara'), NO cambiamos updated_at ni message
+      // porque check-plate ya los configuró al autorizar el acceso. Cambiar updated_at causaría que el audio se repita.
+      await sql`
+        UPDATE gate_status
+        SET status = ${newStatus}
+        WHERE id = 1
       `;
     }
 

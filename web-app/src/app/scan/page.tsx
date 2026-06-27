@@ -348,32 +348,7 @@ export default function ScanPage() {
               ) : <div style={{ width: 60 }} />}
             </div>
 
-            {/* Guía horizontal central de enfoque para la placa */}
-            <div style={{
-              position: 'absolute',
-              width: '85%',
-              maxWidth: '420px',
-              height: '120px',
-              border: '2px solid rgba(255, 255, 255, 0.6)',
-              borderRadius: '12px',
-              boxShadow: '0 0 0 9999px rgba(0, 0, 0, 0.45)',
-              pointerEvents: 'none',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}>
-              <span style={{
-                color: 'rgba(255, 255, 255, 0.7)',
-                fontSize: '0.75rem',
-                letterSpacing: '1px',
-                textTransform: 'uppercase',
-                background: 'rgba(0,0,0,0.6)',
-                padding: '4px 10px',
-                borderRadius: '4px'
-              }}>
-                ALINEAR PLACA AQUÍ
-              </span>
-            </div>
+
 
             {/* Overlay inferior: Zoom y controles */}
             <div style={{

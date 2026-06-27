@@ -42,21 +42,27 @@ export async function POST(request: NextRequest) {
       cliente = res[0] as typeof cliente;
       
       approved = true; // Puede entrar
-      finalMessage = `Bienvenido Visitante. Su placa es ${detectedPlate}.`;
+      finalMessage = `Bienvenido Visitante. Recuerde pasar por caja para cancelar su parqueo antes de salir.`;
       messageType = 'success';
     } else {
       // Si existe y NO tiene hora_entrada, está ENTRANDO
       if (!cliente.hora_entrada) {
-        await sql`UPDATE clientes SET hora_entrada = NOW() WHERE id = ${cliente.id}`;
+        await sql`UPDATE clientes SET hora_entrada = NOW(), pagado = false WHERE id = ${cliente.id}`;
         approved = true;
-        finalMessage = `Bienvenido ${cliente.nombre}`;
+        finalMessage = `Bienvenido ${cliente.nombre}. Recuerde pasar por caja a cancelar antes de salir.`;
         messageType = 'success';
       } 
       // Si existe y TIENE hora_entrada, está SALIENDO
       else {
         if (cliente.pagado) {
-          // Ha pagado -> Puede salir, reseteamos su ciclo
-          await sql`UPDATE clientes SET hora_entrada = NULL WHERE id = ${cliente.id}`;
+          // Ha pagado -> Puede salir
+          if (cliente.cedula.startsWith('VISITANTE-') || cliente.nombre === 'Visitante') {
+            // Eliminar de la base de datos al visitante que ya salió
+            await sql`DELETE FROM clientes WHERE id = ${cliente.id}`;
+          } else {
+            // Cliente registrado -> Reseteamos su ciclo y ponemos pagado en false para su próxima visita
+            await sql`UPDATE clientes SET hora_entrada = NULL, pagado = false WHERE id = ${cliente.id}`;
+          }
           approved = true;
           finalMessage = `Buen viaje ${cliente.nombre}`;
           messageType = 'success';

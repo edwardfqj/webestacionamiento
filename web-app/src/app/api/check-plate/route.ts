@@ -59,7 +59,7 @@ export async function POST(request: NextRequest) {
           await sql`UPDATE clientes SET hora_entrada = NOW() WHERE id = ${cliente.id}`;
           approved = true;
           if (!cliente.pagado) {
-            finalMessage = `Bienvenido ${cliente.nombre}. Recuerde cancelar su mensualidad ($20) antes de salir.`;
+            finalMessage = `Bienvenido ${cliente.nombre}. Recuerde cancelar su mensualidad antes de salir.`;
           } else {
             finalMessage = `Bienvenido ${cliente.nombre}`;
           }
@@ -86,7 +86,7 @@ export async function POST(request: NextRequest) {
           if (isVisitor) {
             finalMessage = `Acceso denegado. Diríjase a la caja para cancelar las horas de parqueo.`;
           } else {
-            finalMessage = `Acceso denegado. Diríjase a la caja para cancelar su mensualidad de $20.`;
+            finalMessage = `Acceso denegado. Diríjase a la caja para cancelar su mensualidad.`;
           }
           messageType = 'error';
         }

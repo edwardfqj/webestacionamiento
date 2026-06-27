@@ -23,12 +23,24 @@
 #include <HTTPClient.h>
 #include <WiFi.h>
 #include <WiFiClientSecure.h>
+#include <esp_wifi.h>
+#include "esp_wpa2.h" // Librería necesaria para redes WPA2 Enterprise (Universidad)
 
 // ============================================================
-// CONFIGURACIÓN - EDITAR ESTOS VALORES
+// CONFIGURACIÓN DE RED WIFI (Elige Normal o Universitaria)
 // ============================================================
-const char *WIFI_SSID = "faby";         // Nombre de tu red WiFi
-const char *WIFI_PASSWORD = "12345678"; // Contraseña de tu red WiFi
+// Descomenta (quita las //) de la siguiente línea si vas a usar WiFi de Universidad con Usuario/Contraseña:
+// #define WIFI_UNIVERSIDAD
+
+#ifdef WIFI_UNIVERSIDAD
+  const char *WIFI_SSID    = "WiFi_Universidad";       // Nombre de la red WiFi de la universidad
+  const char *EAP_IDENTITY = "usuario@uni.edu.ec";     // Identidad anónima o correo institucional
+  const char *EAP_USERNAME = "usuario";                // Tu usuario institucional
+  const char *EAP_PASSWORD = "tu_contraseña";          // Contraseña del correo/universidad
+#else
+  const char *WIFI_SSID     = "Galaxy A316AF9";        // Nombre de tu red WiFi normal
+  const char *WIFI_PASSWORD = "lufx0428";              // Contraseña de tu red WiFi normal
+#endif
 
 // URL de tu servidor en Vercel (Internet)
 const char *SERVER_URL = "https://webestacionamiento-six.vercel.app";
@@ -141,8 +153,20 @@ void loop() {
 // CONECTAR WIFI
 // ============================================================
 void connectWiFi() {
-  Serial.printf("[WIFI] Conectando a %s", WIFI_SSID);
+  Serial.printf("[WIFI] Conectando a %s...\n", WIFI_SSID);
+  WiFi.disconnect(true);
+  WiFi.mode(WIFI_STA);
+
+#ifdef WIFI_UNIVERSIDAD
+  Serial.println("[WIFI] Configurando autenticación WPA2 Enterprise (Universidad)...");
+  esp_wifi_sta_wpa2_ent_set_identity((uint8_t *)EAP_IDENTITY, strlen(EAP_IDENTITY));
+  esp_wifi_sta_wpa2_ent_set_username((uint8_t *)EAP_USERNAME, strlen(EAP_USERNAME));
+  esp_wifi_sta_wpa2_ent_set_password((uint8_t *)EAP_PASSWORD, strlen(EAP_PASSWORD));
+  esp_wifi_sta_wpa2_ent_enable();
+  WiFi.begin(WIFI_SSID);
+#else
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+#endif
 
   int attempts = 0;
   while (WiFi.status() != WL_CONNECTED && attempts < 30) {

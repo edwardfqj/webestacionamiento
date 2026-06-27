@@ -187,7 +187,8 @@ export default function ScanPage() {
         setScanBuffer(prev => {
           const newBuffer = [...prev, newReading];
           
-          if (newBuffer.length >= 3) {
+          // Si la confianza es muy alta (>=99%) o ya recolectamos 2 lecturas, procesar de inmediato
+          if (newReading.score >= 0.99 || newBuffer.length >= 2) {
             evaluateBufferAndProcess(newBuffer, isBackground);
             return [];
           }
@@ -248,7 +249,7 @@ export default function ScanPage() {
           <div style={{ textAlign: 'center', maxWidth: 400 }}>
             <h2 className="page-title" style={{ marginBottom: '1rem' }}>ALPR System</h2>
             <p style={{ color: 'var(--text-secondary)', marginBottom: '2rem' }}>
-              Sistema de reconocimiento con Múltiple Verificación (Mejor de 3).
+              Sistema de reconocimiento rápido (2 verificaciones o 100% inmediato).
             </p>
             {errorMsg && <div style={{ color: 'var(--color-error)', marginBottom: '1rem', fontSize: '0.85rem' }}>{errorMsg}</div>}
             <button className="btn btn-primary" style={{ width: '100%', padding: '12px' }} onClick={startCamera}>
@@ -343,7 +344,7 @@ export default function ScanPage() {
                   fontSize: '0.8rem',
                   fontWeight: 700
                 }}>
-                  {scanBuffer.length}/3
+                  {scanBuffer.length}/2
                 </div>
               ) : <div style={{ width: 60 }} />}
             </div>
